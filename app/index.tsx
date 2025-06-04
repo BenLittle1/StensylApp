@@ -24,7 +24,8 @@ const TemporaryNavigationScreen = () => {
     { name: 'Study Log Screen', path: '/studyLog' }, 
     { name: 'Notifications Screen', path: '/notifications' }, 
     { name: 'Messages Screen', path: '/messages' },
-    { name: 'Study Tracker Screen', path: '/studyTracker' }, // MODIFIED: Added Study Tracker
+    { name: 'Study Tracker Screen', path: '/studyTracker' },
+    { name: 'Groups Screen', path: '/groups' }, // MODIFIED: Added Groups Screen
     // Note: Dynamic routes like '/comments/[postId]' are typically navigated to from other screens
   ];
 
@@ -115,5 +116,4 @@ const styles = StyleSheet.create({
 });
 
 export default TemporaryNavigationScreen;
-
 

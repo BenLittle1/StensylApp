@@ -2,22 +2,22 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Href, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    FlatList,
-    SafeAreaView,
-    Share,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  FlatList,
+  Share,
+  // SafeAreaView, // Removed
+  // StatusBar, // Removed
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 // Define your theme colors
 const stensylColors = {
   background: '#101a23',
-  headerBackground: 'rgba(16, 26, 35, 0.8)',
+  // headerBackground: 'rgba(16, 26, 35, 0.8)', // Header bg is now in (tabs)/_layout
   textWhite: '#ffffff',
-  iconWhite: '#ffffff',
+  // iconWhite: '#ffffff', // Header icon color is now in (tabs)/_layout
   cardBackground: '#1a2633', 
   textMuted: '#90aecb',
   primaryAccent: '#0b80ee',
@@ -26,17 +26,6 @@ const stensylColors = {
   postPlaceholderBg: '#394B59', 
   iconColor: '#90aecb', 
 };
-
-// Reusable Icon Button for Header
-interface HeaderIconButtonProps {
-  iconName: keyof typeof MaterialIcons.glyphMap;
-  onPress: () => void;
-}
-const HeaderIconButton = ({ iconName, onPress }: HeaderIconButtonProps) => (
-  <TouchableOpacity style={styles.headerIconTouchable} onPress={onPress}>
-    <MaterialIcons name={iconName} size={28} color={stensylColors.iconWhite} />
-  </TouchableOpacity>
-);
 
 // Weekly Progress Day Box Component
 interface DayBoxProps {
@@ -147,13 +136,20 @@ const PostItem: React.FC<PostItemProps> = ({
 
 
 const FeedScreen = () => {
-  const router = useRouter(); 
   const [studyStreak, setStudyStreak] = useState(12); 
   const [weeklyStudyDays, setWeeklyStudyDays] = useState([
     true, true, false, true, false, true, false 
   ]);
   const dayInitials = ["M", "T", "W", "T", "F", "S", "S"];
-  const currentDayIndex = new Date().getDay(); 
+  
+  // MODIFIED: Logic to determine the current day's index in your dayInitials array
+  const jsDayOfWeek = new Date().getDay(); // Sunday = 0, Monday = 1, ..., Saturday = 6
+  let actualCurrentDayIndexInArray: number;
+  if (jsDayOfWeek === 0) { // If today is Sunday
+    actualCurrentDayIndexInArray = 6; // 'S' (Sunday) is at index 6 in your array
+  } else { // If today is Monday through Saturday
+    actualCurrentDayIndexInArray = jsDayOfWeek - 1; // Monday (1) -> index 0, Tuesday (2) -> index 1, etc.
+  }
   
   const [posts, setPosts] = useState<PostItemProps[]>([
     { id: '1', userName: 'Ben Little', timestamp: '7:07 PM', location: 'Kingston, Ontario', timeStudied: '2.5h', description: 'Focused study session tonight working on my new React Native project. Making good progress! Feeling motivated. 🚀' },
@@ -161,79 +157,36 @@ const FeedScreen = () => {
     { id: '3', userName: 'Alex Chen', timestamp: '2 days ago', location: 'Vancouver, BC', timeStudied: '3.0h', description: 'Grinding for midterms. This new study spot is amazing for concentration.' },
   ]);
 
-  const handleSearchPress = () => { 
-    router.push('/search' as Href); 
-    console.log('Search icon pressed, navigating to /search');
-  };
-
-  const handleStudyLogPress = () => {
-    router.push('/studyLog' as Href); 
-    console.log('Study Log icon pressed, navigating to /studyLog');
-  };
-
-  // MODIFIED: Handler for the new notifications icon
-  const handleNotificationsPress = () => {
-    router.push('/notifications' as Href);
-    console.log('Notifications icon pressed, navigating to /notifications');
-  };
-  
-  // MODIFIED: Handler for the messages icon
-  const handleMessagesPress = () => {
-    router.push('/messages' as Href);
-    console.log('Messages icon pressed, navigating to /messages');
-  };
-
   const renderPost = ({ item }: { item: PostItemProps }) => <PostItem {...item} />;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={stensylColors.background} />
-      
-      {/* Header */}
-      <View style={styles.headerContainer}>
-        <View style={styles.headerInnerContainer}>
-          <View style={styles.headerActions}>
-            {/* MODIFIED: Changed icon from 'add' to 'notifications-none' and onPress */}
-            <HeaderIconButton iconName="notifications-none" onPress={handleNotificationsPress} /> 
-            <HeaderIconButton iconName="search" onPress={handleSearchPress} /> 
-          </View>
-          <Text style={styles.headerTitle}>stensyl</Text>
-          <View style={styles.headerActions}>
-            {/* MODIFIED: Updated onPress for messages icon */}
-            <HeaderIconButton iconName="chat-bubble-outline" onPress={handleMessagesPress} /> 
-            <HeaderIconButton iconName="article" onPress={handleStudyLogPress} /> 
-          </View>
-        </View>
-      </View>
-
-      <FlatList
-        data={posts}
-        renderItem={renderPost}
-        keyExtractor={item => item.id}
-        ListHeaderComponent={ 
-          <View style={styles.feedHeaderContent}>
-            {/* Weekly Progress Section */}
-            <View style={styles.weeklyProgressContainer}>
-              <View style={styles.dayBoxesContainer}>
-                {dayInitials.map((initial, index) => (
-                  <DayBox
-                    key={index}
-                    dayInitial={initial}
-                    studied={weeklyStudyDays[index]}
-                    isCurrentDay={ (currentDayIndex === index && currentDayIndex !==0) || (currentDayIndex === 0 && index === 6) }
-                  />
-                ))}
-              </View>
-              <View style={styles.streakInfoContainer}> 
-                <MaterialIcons name="local-fire-department" size={22} color={stensylColors.primaryAccent} style={styles.streakIcon} />
-                <Text style={styles.streakText}>{studyStreak}</Text> 
-              </View>
+    <FlatList
+      data={posts}
+      renderItem={renderPost}
+      keyExtractor={item => item.id}
+      ListHeaderComponent={ 
+        <View style={styles.feedHeaderContent}>
+          {/* Weekly Progress Section */}
+          <View style={styles.weeklyProgressContainer}>
+            <View style={styles.dayBoxesContainer}>
+              {dayInitials.map((initial, index) => (
+                <DayBox
+                  key={index}
+                  dayInitial={initial}
+                  studied={weeklyStudyDays[index]}
+                  isCurrentDay={index === actualCurrentDayIndexInArray} // MODIFIED: Use corrected index
+                />
+              ))}
+            </View>
+            <View style={styles.streakInfoContainer}> 
+              <MaterialIcons name="local-fire-department" size={22} color={stensylColors.primaryAccent} style={styles.streakIcon} />
+              <Text style={styles.streakText}>{studyStreak}</Text> 
             </View>
           </View>
-        }
-        contentContainerStyle={styles.feedListContainer}
-      />
-    </SafeAreaView>
+        </View>
+      }
+      contentContainerStyle={styles.feedListContainer}
+    />
   );
 };
 
@@ -242,17 +195,6 @@ const dayBoxSize = 30;
 const dayBoxMargin = 6; 
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: stensylColors.background },
-  headerContainer: {},
-  headerInnerContainer: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: pageHorizontalPadding, paddingVertical: 10,
-    backgroundColor: stensylColors.headerBackground,
-  },
-  headerActions: { flexDirection: 'row', gap: 4 },
-  headerIconTouchable: { padding: 8, borderRadius: 999 },
-  headerTitle: { color: stensylColors.textWhite, fontSize: 24, fontWeight: 'bold', letterSpacing: -0.015 * 24 },
-  
   feedHeaderContent: { 
     paddingHorizontal: pageHorizontalPadding, 
     paddingTop: 16, 
@@ -310,7 +252,7 @@ const styles = StyleSheet.create({
   },
 
   feedListContainer: {
-    paddingBottom: 20, 
+    paddingBottom: 10, 
   },
   postContainer: {
     backgroundColor: stensylColors.cardBackground,
@@ -385,4 +327,5 @@ const styles = StyleSheet.create({
 });
 
 export default FeedScreen;
+
 

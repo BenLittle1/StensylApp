@@ -1,29 +1,27 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Href, Stack, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Stack, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    ScrollView as ModalScrollView,
-    Platform,
-    SafeAreaView,
-    ScrollView, // Main ScrollView for the page content
-    StatusBar,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  ScrollView as ModalScrollView, // Alias for modal's ScrollView
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 // Define your theme colors
 const stensylColors = {
   background: '#101a23',
-  headerBackground: 'rgba(16, 26, 35, 0.8)',
   textWhite: '#ffffff',
-  iconWhite: '#ffffff',
+  iconWhite: '#ffffff', // For icons within this page if not from shared header
   primaryAccent: '#0b80ee',
   cardBackground: '#1a2633',
   inputBackground: '#223649',
@@ -35,17 +33,6 @@ const stensylColors = {
   toggleInactive: '#394B59',
   modalOptionSelected: 'rgba(11, 128, 238, 0.2)', 
 };
-
-// Reusable Icon Button for Header
-interface HeaderIconButtonProps {
-  iconName: keyof typeof MaterialIcons.glyphMap;
-  onPress: () => void;
-}
-const HeaderIconButton = ({ iconName, onPress }: HeaderIconButtonProps) => (
-  <TouchableOpacity style={styles.headerIconTouchable} onPress={onPress}>
-    <MaterialIcons name={iconName} size={28} color={stensylColors.iconWhite} />
-  </TouchableOpacity>
-);
 
 // Helper function to format time (always HH:MM:SS if hours > 0 for stopwatch)
 const formatStopwatchTime = (totalSeconds: number): string => {
@@ -68,17 +55,31 @@ const formatPomodoroTime = (totalSeconds: number): string => {
   return `${mm}:${ss}`;
 };
 
-const POMODORO_BREAK_DURATION = 5 * 60;  // 5 minutes in seconds
-const DEFAULT_POMODORO_STUDY_DURATION = 25 * 60; // Default 25 minutes
+const POMODORO_BREAK_DURATION = 5 * 60;
+const DEFAULT_POMODORO_STUDY_DURATION = 25 * 60;
 
 type TimerMode = 'Stopwatch' | 'Pomodoro';
 type PomodoroPhase = 'Study' | 'Break';
 
-// Pomodoro duration options in minutes
 const pomodoroDurationOptions = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
 
+interface StudyLogEntry {
+  id: string;
+  date: string; 
+  startTime: string; 
+  duration: string; 
+  subject: string;
+  topic: string; 
+  notes?: string; 
+  mode?: TimerMode;
+  efficiency?: number;
+}
+
+const ASYNC_STORAGE_STUDY_LOG_KEY = '@StudyLogSessions_StensylApp';
+
+
 const StudyTrackerScreen = () => {
-  const router = useRouter();
+  const router = useRouter(); 
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [stopwatchSeconds, setStopwatchSeconds] = useState(0);
   
@@ -89,10 +90,12 @@ const StudyTrackerScreen = () => {
   const [isDurationPickerVisible, setIsDurationPickerVisible] = useState(false);
 
   const [isEndSessionModalVisible, setIsEndSessionModalVisible] = useState(false);
-  const [sessionName, setSessionName] = useState('');
+  const [sessionName, setSessionName] = useState(''); 
   const [subjectStudied, setSubjectStudied] = useState('');
+  const [efficiencyScore, setEfficiencyScore] = useState(''); 
+  const [sessionDescription, setSessionDescription] = useState('');
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null); // CORRECTED TYPE
+  const intervalRef = useRef<NodeJS.Timeout | null>(null); 
 
   const resetPomodoro = useCallback((startPhase: PomodoroPhase = 'Study') => {
     setIsTimerActive(false); 
@@ -108,11 +111,9 @@ const StudyTrackerScreen = () => {
           setPomodoroSecondsLeft((prevSeconds) => {
             if (prevSeconds <= 1) {
               if (pomodoroPhase === 'Study') {
-                setPomodoroPhase('Break');
-                return POMODORO_BREAK_DURATION;
+                setPomodoroPhase('Break'); return POMODORO_BREAK_DURATION;
               } else {
-                setPomodoroPhase('Study');
-                return customStudyDuration; 
+                setPomodoroPhase('Study'); return customStudyDuration; 
               }
             }
             return prevSeconds - 1;
@@ -148,26 +149,47 @@ const StudyTrackerScreen = () => {
     setIsEndSessionModalVisible(true);
   };
 
-  const handleSaveSession = () => {
+  const handleSaveSession = async () => {
     if (!sessionName.trim() || !subjectStudied.trim()) {
       Alert.alert("Missing Information", "Please enter both session name and subject.");
       return;
     }
-    const totalDurationLogged = formatStopwatchTime(stopwatchSeconds);
-    console.log('Session Ended:', {
-      name: sessionName,
-      subject: subjectStudied,
-      duration: totalDurationLogged,
-      totalSeconds: stopwatchSeconds,
+    const score = parseInt(efficiencyScore, 10);
+    if (efficiencyScore.trim() && (isNaN(score) || score < 1 || score > 10)) {
+        Alert.alert("Invalid Score", "Efficiency score must be a number between 1 and 10.");
+        return;
+    }
+
+    const now = new Date();
+    const newEntry: StudyLogEntry = {
+      id: Date.now().toString(), 
+      date: now.toISOString().split('T')[0], 
+      startTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+      duration: formatStopwatchTime(stopwatchSeconds),
+      subject: subjectStudied.trim(),
+      topic: sessionName.trim(),
+      notes: sessionDescription.trim() || undefined,
       mode: timerMode,
-    });
-    
-    setStopwatchSeconds(0);
-    resetPomodoro('Study'); 
-    setSessionName('');
-    setSubjectStudied('');
-    setIsEndSessionModalVisible(false);
-    Alert.alert("Session Saved!", `"${sessionName}" for ${subjectStudied} (${totalDurationLogged}) logged.`);
+      efficiency: efficiencyScore.trim() ? score : undefined,
+    };
+
+    try {
+      const existingSessionsJson = await AsyncStorage.getItem(ASYNC_STORAGE_STUDY_LOG_KEY);
+      const existingSessions: StudyLogEntry[] = existingSessionsJson ? JSON.parse(existingSessionsJson) : [];
+      const updatedSessions = [newEntry, ...existingSessions]; 
+      await AsyncStorage.setItem(ASYNC_STORAGE_STUDY_LOG_KEY, JSON.stringify(updatedSessions));
+      
+      Alert.alert("Session Saved!", `"${newEntry.topic}" for ${newEntry.subject} (${newEntry.duration}) logged.`);
+      
+      setStopwatchSeconds(0); resetPomodoro('Study'); 
+      setSessionName(''); setSubjectStudied('');
+      setEfficiencyScore(''); setSessionDescription('');
+      setIsEndSessionModalVisible(false);
+
+    } catch (e) {
+      console.error("Failed to save session to AsyncStorage", e);
+      Alert.alert("Save Error", "Could not save your study session. Please try again.");
+    }
   };
 
   const handleCancelSave = () => setIsEndSessionModalVisible(false);
@@ -175,8 +197,7 @@ const StudyTrackerScreen = () => {
   const toggleMode = () => {
     setIsTimerActive(false); 
     if (timerMode === 'Stopwatch') {
-      setTimerMode('Pomodoro');
-      resetPomodoro('Study'); 
+      setTimerMode('Pomodoro'); resetPomodoro('Study'); 
     } else {
       setTimerMode('Stopwatch');
     }
@@ -185,45 +206,24 @@ const StudyTrackerScreen = () => {
   const handleDurationSelect = (durationMinutes: number) => {
     const newDurationSeconds = durationMinutes * 60;
     setCustomStudyDuration(newDurationSeconds);
-    if (pomodoroPhase === 'Study') {
-      setPomodoroSecondsLeft(newDurationSeconds);
-    }
+    if (pomodoroPhase === 'Study') setPomodoroSecondsLeft(newDurationSeconds);
     setIsTimerActive(false); 
     setIsDurationPickerVisible(false);
   };
   
-  // Header navigation handlers
-  const handleNotificationsPress = () => router.push('/notifications' as Href);
-  const handleSearchPress = () => router.push('/search' as Href);
-  const handleMessagesPress = () => router.push('/messages' as Href);
-  const handleStudyLogPress = () => router.push('/studyLog' as Href);
+  const handleAdvancedStatsPress = () => {
+    console.log("Advanced Statistics button pressed!");
+    // router.push('/advancedstats' as Href); 
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.screenContainer}> 
       <Stack.Screen 
         options={{ 
           title: 'Study Tracker', 
-          headerStyle: { backgroundColor: stensylColors.headerBackground },
-          headerTintColor: stensylColors.iconWhite,
-          headerTitleStyle: { color: stensylColors.textWhite },
-          headerBackTitleVisible: false,
+          // Header styling is primarily controlled by app/(tabs)/_layout.tsx
         }} 
       />
-      {/* CORRECTED: Added the actual header JSX */}
-      <View style={styles.headerContainer}>
-        <View style={styles.headerInnerContainer}>
-          <View style={styles.headerActions}>
-            <HeaderIconButton iconName="notifications-none" onPress={handleNotificationsPress} />
-            <HeaderIconButton iconName="search" onPress={handleSearchPress} />
-          </View>
-          <Text style={styles.headerTitle}>stensyl</Text>
-          <View style={styles.headerActions}>
-            <HeaderIconButton iconName="chat-bubble-outline" onPress={handleMessagesPress} />
-            <HeaderIconButton iconName="article" onPress={handleStudyLogPress} />
-          </View>
-        </View>
-      </View>
 
       {timerMode === 'Pomodoro' && (
         <View style={styles.topRightStopwatchContainer}>
@@ -291,31 +291,64 @@ const StudyTrackerScreen = () => {
 
       {/* End Session Modal */}
       <Modal
-        animationType="slide" transparent={true} visible={isEndSessionModalVisible}
-        onRequestClose={() => setIsEndSessionModalVisible(!isEndSessionModalVisible)}
+        animationType="slide"
+        transparent={true}
+        visible={isEndSessionModalVisible}
+        onRequestClose={handleCancelSave}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Save Study Session</Text>
-            <Text style={styles.modalDurationText}>Total Duration: {formatStopwatchTime(stopwatchSeconds)}</Text>
-            <TextInput
-              style={styles.modalInput} placeholder="Name of the session"
-              placeholderTextColor={stensylColors.textMuted} value={sessionName} onChangeText={setSessionName}
-            />
-            <TextInput
-              style={styles.modalInput} placeholder="Subject studied"
-              placeholderTextColor={stensylColors.textMuted} value={subjectStudied} onChangeText={setSubjectStudied}
-            />
-            <View style={styles.modalButtonRow}>
-              <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={handleCancelSave}>
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleSaveSession}>
-                <Text style={styles.modalButtonText}>Save Session</Text>
-              </TouchableOpacity>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOuterKAV} 
+        >
+          <View style={styles.modalOverlay}> 
+            <View style={styles.modalContent}> 
+              <Text style={styles.modalTitle}>Save Study Session</Text>
+              <Text style={styles.modalDurationText}>Total Duration: {formatStopwatchTime(stopwatchSeconds)}</Text>
+              <ModalScrollView style={styles.modalInputsScrollView} contentContainerStyle={styles.modalInputsScrollContent}>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Name of the session (e.g., Midterm Prep Ch. 3)"
+                  placeholderTextColor={stensylColors.textMuted}
+                  value={sessionName}
+                  onChangeText={setSessionName}
+                />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Subject studied (e.g., Calculus II)"
+                  placeholderTextColor={stensylColors.textMuted}
+                  value={subjectStudied}
+                  onChangeText={setSubjectStudied}
+                />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Efficiency Score (1-10, Optional)"
+                  placeholderTextColor={stensylColors.textMuted}
+                  value={efficiencyScore}
+                  onChangeText={setEfficiencyScore}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+                <TextInput
+                  style={[styles.modalInput, styles.modalDescriptionInput]}
+                  placeholder="Optional: What did you work on?"
+                  placeholderTextColor={stensylColors.textMuted}
+                  value={sessionDescription}
+                  onChangeText={setSessionDescription}
+                  multiline={true}
+                  numberOfLines={3}
+                />
+              </ModalScrollView>
+              <View style={styles.modalButtonRow}>
+                <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={handleCancelSave}>
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleSaveSession}>
+                  <Text style={styles.modalButtonText}>Save Session</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Pomodoro Duration Picker Modal */}
@@ -325,7 +358,7 @@ const StudyTrackerScreen = () => {
         visible={isDurationPickerVisible}
         onRequestClose={() => setIsDurationPickerVisible(false)}
       >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPressOut={() => setIsDurationPickerVisible(false)}>
+        <TouchableOpacity style={styles.modalPickerOverlay} activeOpacity={1} onPressOut={() => setIsDurationPickerVisible(false)}>
           <View style={styles.durationPickerModalContent}>
             <Text style={styles.modalTitle}>Select Study Duration</Text>
             <ModalScrollView>
@@ -351,26 +384,25 @@ const StudyTrackerScreen = () => {
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const pageHorizontalPadding = 16;
+// const graphBoxInset = 10; // Not used in this file
+// const graphBoxInternalPadding = 8; // Not used in this file
+
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: stensylColors.background },
-  headerContainer: {}, 
-  headerInnerContainer: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: pageHorizontalPadding, paddingVertical: 10,
-    backgroundColor: stensylColors.headerBackground,
+  screenContainer: { 
+    flex: 1,
+    backgroundColor: stensylColors.background, 
   },
-  headerActions: { flexDirection: 'row', gap: 4 },
-  headerIconTouchable: { padding: 8, borderRadius: 999 },
-  headerTitle: { color: stensylColors.textWhite, fontSize: 24, fontWeight: 'bold', letterSpacing: -0.015 * 24 },
   topRightStopwatchContainer: { 
-    position: 'absolute', top: (StatusBar.currentHeight || 0) + 70, 
-    right: pageHorizontalPadding, backgroundColor: stensylColors.cardBackground,
+    position: 'absolute', 
+    top: Platform.OS === 'ios' ? 10 : 10, 
+    right: pageHorizontalPadding, 
+    backgroundColor: stensylColors.cardBackground,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, zIndex: 10,
   },
   topRightStopwatchText: {
@@ -379,7 +411,9 @@ const styles = StyleSheet.create({
   keyboardAvoidingContainer: { flex: 1 },
   scrollContentContainer: {
     flexGrow: 1, justifyContent: 'center', alignItems: 'center',
-    padding: pageHorizontalPadding, paddingTop: 20, 
+    padding: pageHorizontalPadding, 
+    paddingTop: 20, 
+    paddingBottom: 20, 
   },
   modeToggleContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 }, 
   modeLabel: { fontSize: 16, color: stensylColors.textMuted, marginHorizontal: 10 },
@@ -416,45 +450,75 @@ const styles = StyleSheet.create({
   },
   playPauseButton: { marginBottom: 40 }, 
   endSessionButtonContainer: {
-    paddingHorizontal: pageHorizontalPadding, paddingBottom: Platform.OS === 'ios' ? 30 : 20, 
-    paddingTop: 10, borderTopWidth: 1, borderTopColor: stensylColors.cardBackground,
+    paddingHorizontal: pageHorizontalPadding, 
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20, 
+    paddingTop: 10, 
+    backgroundColor: stensylColors.background, 
   },
   actionButton: { paddingVertical: 15, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   endButton: { backgroundColor: stensylColors.primaryAccent },
   actionButtonText: { color: stensylColors.textWhite, fontSize: 18, fontWeight: '600' },
   
-  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)' },
+  modalOuterKAV: { 
+    flex: 1,
+    justifyContent: 'center', 
+    alignItems: 'center', 
+  },
+  modalOverlay: { 
+    flex: 1, 
+    width: '100%', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
   modalContent: {
-    width: '90%', backgroundColor: stensylColors.cardBackground,
-    borderRadius: 15, padding: 20, alignItems: 'center',
+    width: '90%', 
+    maxHeight: Platform.OS === 'ios' ? '85%' : '90%', 
+    backgroundColor: stensylColors.cardBackground,
+    borderRadius: 15, 
+    alignItems: 'center', 
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25, shadowRadius: 4, elevation: 5,
   },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: stensylColors.textWhite, marginBottom: 10 },
-  modalDurationText: { fontSize: 16, color: stensylColors.textMuted, marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: stensylColors.textWhite, marginBottom: 10, marginTop: 20, textAlign: 'center' },
+  modalDurationText: { fontSize: 16, color: stensylColors.textMuted, marginBottom: 15, textAlign: 'center' },
+  modalInputsScrollView: { 
+    width: '100%',
+    maxHeight: Platform.OS === 'ios' ? 250 : 200, 
+  },
+  modalInputsScrollContent: { 
+     paddingHorizontal: 20, 
+  },
   modalInput: {
     width: '100%', backgroundColor: stensylColors.inputBackground,
     borderRadius: 8, paddingHorizontal: 15, paddingVertical: 12,
-    fontSize: 16, color: stensylColors.textWhite, marginBottom: 15,
+    fontSize: 16, color: stensylColors.textWhite, marginBottom: 12, 
     borderWidth: 1, borderColor: stensylColors.background, 
   },
-  modalButtonRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 10 },
+  modalDescriptionInput: { 
+    minHeight: 80, 
+    textAlignVertical: 'top', 
+  },
+  modalButtonRow: { 
+    flexDirection: 'row', justifyContent: 'space-between', 
+    width: '100%', marginTop: 15, paddingHorizontal: 20, paddingBottom: 20,
+  },
   modalButton: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginHorizontal: 5 },
   saveButton: { backgroundColor: stensylColors.successGreen },
   cancelButton: { backgroundColor: stensylColors.disabledButton },
   modalButtonText: { color: stensylColors.textWhite, fontSize: 16, fontWeight: '600' },
 
+  modalPickerOverlay: { 
+    flex: 1, justifyContent: 'center', alignItems: 'center', 
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
   durationPickerModalContent: {
-    width: '80%',
-    maxHeight: '70%', 
+    width: '80%', maxHeight: '70%', 
     backgroundColor: stensylColors.cardBackground,
-    borderRadius: 15,
-    padding: 20,
-    alignItems: 'stretch', 
+    borderRadius: 15, padding: 20, alignItems: 'stretch', 
   },
   durationOptionButton: {
-    paddingVertical: 15,
-    borderBottomWidth: 1,
+    paddingVertical: 15, borderBottomWidth: 1,
     borderBottomColor: stensylColors.inputBackground, 
     alignItems: 'center',
   },
@@ -468,5 +532,4 @@ const styles = StyleSheet.create({
 });
 
 export default StudyTrackerScreen;
-
 

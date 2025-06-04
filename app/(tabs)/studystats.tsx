@@ -1,24 +1,22 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { Href, useRouter } from 'expo-router'; // MODIFIED: Import useRouter and Href
 import React, { useMemo, useState } from 'react';
 import {
   Dimensions,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
+  ScrollView, // This will be handled by (tabs)/_layout.tsx
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { ContributionGraph, LineChart } from 'react-native-chart-kit';
+// import { useRouter, Href } from 'expo-router'; // Removed, header navigation handled by layout
 
 // Define your theme colors
 const stensylColors = {
   background: '#101a23',
-  headerBackground: 'rgba(16, 26, 35, 0.8)',
+  // headerBackground: 'rgba(16, 26, 35, 0.8)', // Defined in shared layout
   textWhite: '#ffffff',
-  iconWhite: '#ffffff',
+  // iconWhite: '#ffffff', // Defined in shared layout
   cardBackground: '#1a2633',
   textMuted: '#90aecb',
   primaryAccent: '#0b80ee',
@@ -31,16 +29,9 @@ const stensylColors = {
   buttonText: '#FFFFFF',
 };
 
-// Reusable Icon Button for Header
-interface HeaderIconButtonProps {
-  iconName: keyof typeof MaterialIcons.glyphMap;
-  onPress: () => void;
-}
-const HeaderIconButton = ({ iconName, onPress }: HeaderIconButtonProps) => (
-  <TouchableOpacity style={styles.headerIconTouchable} onPress={onPress}>
-    <MaterialIcons name={iconName} size={28} color={stensylColors.iconWhite} />
-  </TouchableOpacity>
-);
+// HeaderIconButton is now part of app/(tabs)/_layout.tsx
+// interface HeaderIconButtonProps { /* ... */ }
+// const HeaderIconButton = ({ iconName, onPress }: HeaderIconButtonProps) => ( /* ... */ );
 
 // Stat Card Component
 interface StatCardProps {
@@ -74,7 +65,7 @@ const generateContributionData = (endDate: Date, numDays: number, fillProbabilit
 
 
 const StudyStatisticsScreen = () => {
-  const router = useRouter(); // MODIFIED: Initialize router for header actions
+  // const router = useRouter(); // Header navigation is handled by (tabs)/_layout.tsx
   const [studyStreak, setStudyStreak] = useState(12);
   const [hoursThisWeek, setHoursThisWeek] = useState(8.5); 
 
@@ -126,23 +117,11 @@ const StudyStatisticsScreen = () => {
     labelColor: (opacity = 1) => stensylColors.chartLabelColor, 
   };
 
-  // MODIFIED: Header navigation handlers (matching FeedScreen)
-  const handleNotificationsPress = () => {
-    router.push('/notifications' as Href);
-    console.log('Notifications icon pressed on Stats page');
-  };
-  const handleSearchPress = () => {
-    router.push('/search' as Href);
-    console.log('Search icon pressed on Stats page');
-  };
-  const handleMessagesPress = () => {
-    router.push('/messages' as Href);
-    console.log('Messages icon pressed on Stats page');
-  };
-  const handleStudyLogPress = () => {
-    router.push('/studyLog' as Href); // Assuming filename is studyLog.tsx
-    console.log('Study Log icon pressed on Stats page');
-  };
+  // Header navigation handlers are now in (tabs)/_layout.tsx
+  // const handleNotificationsPress = () => { /* ... */ };
+  // const handleSearchPress = () => { /* ... */ };
+  // const handleMessagesPress = () => { /* ... */ };
+  // const handleStudyLogPress = () => { /* ... */ };
 
   const handleAdvancedStatsPress = () => {
     console.log("Advanced Statistics button pressed!");
@@ -150,83 +129,65 @@ const StudyStatisticsScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={stensylColors.background} />
-      {/* MODIFIED: Header updated to match FeedScreen */}
-      <View style={styles.headerContainer}>
-        <View style={styles.headerInnerContainer}>
-          <View style={styles.headerActions}>
-            <HeaderIconButton iconName="notifications-none" onPress={handleNotificationsPress} />
-            <HeaderIconButton iconName="search" onPress={handleSearchPress} />
-          </View>
-          <Text style={styles.headerTitle}>stensyl</Text>
-          <View style={styles.headerActions}>
-            <HeaderIconButton iconName="chat-bubble-outline" onPress={handleMessagesPress} />
-            <HeaderIconButton iconName="article" onPress={handleStudyLogPress} />
+    // No SafeAreaView, StatusBar, or Header View here.
+    // These are provided by app/(tabs)/_layout.tsx
+    <ScrollView style={styles.contentScrollView}>
+      <View style={styles.contentContainer}>
+        <Text style={styles.pageTitle}>Study Statistics</Text>
+
+        <View style={styles.statsRowContainer}>
+          <StatCard label="Study Streak" value={`${studyStreak} days`} iconName="local-fire-department" />
+          <StatCard label="Hours This Week" value={`${hoursThisWeek} h`} iconName="timer" />
+        </View>
+
+        {/* Line Chart Section */}
+        <View style={styles.graphSectionContainer}> 
+          <Text style={styles.chartTitle}>Daily Study Progress (This Week)</Text>
+          <View style={styles.chartBox}> 
+            <LineChart
+              data={dailyHoursData} 
+              width={lineChartDrawableWidth} 
+              height={240} 
+              yAxisLabel="" yAxisSuffix=" h" 
+              chartConfig={lineChartSpecificConfig} 
+              bezier style={styles.chartStyle} fromZero={true} 
+            />
           </View>
         </View>
+
+        {/* Monthly Study Activity Section */}
+        <View style={styles.graphSectionContainer}> 
+          <Text style={styles.chartTitle}>Study Activity ({new Date().getFullYear()})</Text> 
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.chartBox} 
+          >
+            <ContributionGraph
+              values={contributionData}
+              endDate={new Date(new Date().getFullYear(), 11, 31)} 
+              numDays={(new Date().getFullYear() % 4 === 0 && new Date().getFullYear() % 100 !== 0) || new Date().getFullYear() % 400 === 0 ? 366 : 365} 
+              width={screenWidth * 2.5 > 700 ? screenWidth * 2.5 : 700} 
+              height={220}
+              chartConfig={contributionGraphChartConfig}
+              squareSize={16} 
+              gutterSize={2} 
+              tooltipDataAttrs={() => ({})}
+              style={styles.contributionGraphStyle} 
+            />
+          </ScrollView>
+        </View>
+
+        {/* Advanced Statistics Button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.advancedStatsButton} onPress={handleAdvancedStatsPress}>
+            <Text style={styles.advancedStatsButtonText}>Advanced Statistics</Text>
+            <MaterialIcons name="arrow-forward-ios" size={16} color={stensylColors.buttonText} style={styles.buttonIcon} />
+          </TouchableOpacity>
+        </View>
+        {/* Removed footerSpacer as paddingBottom on contentContainer or ScrollView should handle space for bottom nav */}
       </View>
-
-
-      <ScrollView style={styles.contentScrollView}>
-        <View style={styles.contentContainer}>
-          <Text style={styles.pageTitle}>Study Statistics</Text>
-
-          <View style={styles.statsRowContainer}>
-            <StatCard label="Study Streak" value={`${studyStreak} days`} iconName="local-fire-department" />
-            <StatCard label="Hours This Week" value={`${hoursThisWeek} h`} iconName="timer" />
-          </View>
-
-          {/* Line Chart Section */}
-          <View style={styles.graphSectionContainer}> 
-            <Text style={styles.chartTitle}>Daily Study Progress (This Week)</Text>
-            <View style={styles.chartBox}> 
-              <LineChart
-                data={dailyHoursData} 
-                width={lineChartDrawableWidth} 
-                height={240} 
-                yAxisLabel="" yAxisSuffix=" h" 
-                chartConfig={lineChartSpecificConfig} 
-                bezier style={styles.chartStyle} fromZero={true} 
-              />
-            </View>
-          </View>
-
-          {/* Monthly Study Activity Section */}
-          <View style={styles.graphSectionContainer}> 
-            <Text style={styles.chartTitle}>Study Activity ({new Date().getFullYear()})</Text> 
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.chartBox} 
-            >
-              <ContributionGraph
-                values={contributionData}
-                endDate={new Date(new Date().getFullYear(), 11, 31)} 
-                numDays={(new Date().getFullYear() % 4 === 0 && new Date().getFullYear() % 100 !== 0) || new Date().getFullYear() % 400 === 0 ? 366 : 365} 
-                width={screenWidth * 2.5 > 700 ? screenWidth * 2.5 : 700} 
-                height={220}
-                chartConfig={contributionGraphChartConfig}
-                squareSize={16} 
-                gutterSize={2} 
-                tooltipDataAttrs={() => ({})}
-                style={styles.contributionGraphStyle} 
-              />
-            </ScrollView>
-          </View>
-
-          {/* Advanced Statistics Button */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.advancedStatsButton} onPress={handleAdvancedStatsPress}>
-              <Text style={styles.advancedStatsButtonText}>Advanced Statistics</Text>
-              <MaterialIcons name="arrow-forward-ios" size={16} color={stensylColors.buttonText} style={styles.buttonIcon} />
-            </TouchableOpacity>
-          </View>
-
-        </View>
-      </ScrollView>
-      <View style={styles.footerSpacer} />
-    </SafeAreaView>
+    </ScrollView>
   );
 };
 
@@ -235,25 +196,27 @@ const graphBoxInset = 10;
 const graphBoxInternalPadding = 8; 
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: stensylColors.background },
-  headerContainer: {}, 
-  headerInnerContainer: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: pageHorizontalPadding, paddingVertical: 10,
-    backgroundColor: stensylColors.headerBackground,
+  // safeArea: { flex: 1, backgroundColor: stensylColors.background }, // Removed
+  // headerContainer: {}, // Removed
+  // headerInnerContainer: { /* ... */ }, // Removed
+  // headerActions: { /* ... */ }, // Removed
+  // headerIconTouchable: { /* ... */ }, // Removed
+  // headerTitle: { /* ... */ }, // Removed
+
+  contentScrollView: { 
+    flex: 1, // Ensure ScrollView takes up the space given by the layout's contentArea
+    backgroundColor: stensylColors.background, // Set background here if needed, or layout handles it
   },
-  headerActions: { flexDirection: 'row', gap: 4 },
-  headerIconTouchable: { padding: 8, borderRadius: 999 },
-  headerTitle: { color: stensylColors.textWhite, fontSize: 24, fontWeight: 'bold', letterSpacing: -0.015 * 24 },
-  contentScrollView: { flex: 1 },
   contentContainer: {
-    paddingVertical: 20,
-    alignItems: 'flex-start',
-    flexGrow: 1,
+    paddingVertical: 20, // Top and bottom padding for the scrollable content
+    // alignItems: 'flex-start', // Default, items will take full width unless styled otherwise
+    // flexGrow: 1, // Not always needed if ScrollView itself is flex:1
+    paddingBottom: 80, // MODIFIED: Add significant padding for the bottom nav bar
   },
   pageTitle: {
     fontSize: 22, fontWeight: 'bold', color: stensylColors.textWhite,
     marginBottom: 20, paddingHorizontal: pageHorizontalPadding, 
+    marginTop: 16, // Add some top margin if this is the first content after header
   },
   statsRowContainer: {
     flexDirection: 'row', justifyContent: 'space-between', width: '100%',
@@ -286,9 +249,9 @@ const styles = StyleSheet.create({
   contributionGraphStyle: {},
   buttonContainer: { 
     width: '100%',
-    paddingHorizontal: pageHorizontalPadding,
-    marginTop: 24, 
-    marginBottom: 10, 
+    paddingHorizontal: pageHorizontalPadding, // Align button with page padding
+    // marginTop: 24, // This was here, ensure it's needed or if graphSectionContainer's marginBottom is enough
+    // marginBottom: 10, // This was here
   },
   advancedStatsButton: {
     backgroundColor: stensylColors.buttonBackground,
@@ -298,6 +261,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center',
+    marginTop: 24, // Add margin here if placeholder text was removed
   },
   advancedStatsButtonText: {
     color: stensylColors.buttonText,
@@ -305,9 +269,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   buttonIcon: {},
-  footerSpacer: { height: 20, backgroundColor: stensylColors.background },
+  // footerSpacer: { height: 20, backgroundColor: stensylColors.background }, // Removed
 });
 
 export default StudyStatisticsScreen;
+
 
 

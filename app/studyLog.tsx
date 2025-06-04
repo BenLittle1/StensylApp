@@ -1,13 +1,14 @@
 import { MaterialIcons } from '@expo/vector-icons'; // For icons
-import { Stack } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Stack, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
-    FlatList,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View
+  FlatList,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 
 // Define your theme colors (consistent with other pages)
@@ -15,36 +16,45 @@ const stensylColors = {
   background: '#101a23',
   headerBackground: 'rgba(16, 26, 35, 0.8)',
   textWhite: '#ffffff',
-  iconWhite: '#ffffff', // For back button and potential header icons
-  cardBackground: '#1a2633', // Background for each log entry
+  iconWhite: '#ffffff', 
+  cardBackground: '#1a2633', 
   textMuted: '#90aecb',
-  primaryAccent: '#0b80ee', // For icons or highlights
+  primaryAccent: '#0b80ee', 
 };
 
-// Interface for a study log entry
+// MODIFIED: Updated StudyLogEntry interface to include new fields
+// This should match the interface used in studyTracker.tsx
+type TimerMode = 'Stopwatch' | 'Pomodoro'; // Assuming TimerMode is defined like this in tracker
+
 interface StudyLogEntry {
   id: string;
-  date: string; // e.g., "2025-05-28"
-  startTime: string; // e.g., "10:00 AM"
-  duration: string; // e.g., "2h 30m"
+  date: string; 
+  startTime: string; 
+  duration: string; 
   subject: string;
-  topic: string; // More specific topic
-  notes?: string; // Optional short notes
+  topic: string; 
+  notes?: string; 
+  mode?: TimerMode;
+  efficiency?: number;
 }
+
+const ASYNC_STORAGE_STUDY_LOG_KEY = '@StudyLogSessions_StensylApp'; // Must match key in tracker
 
 // Component to render a single study log item
 const StudyLogItem: React.FC<{ item: StudyLogEntry }> = ({ item }) => {
   return (
     <View style={styles.logItemContainer}>
       <View style={styles.logItemHeader}>
-        <Text style={styles.logItemDate}>{new Date(item.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</Text>
+        <Text style={styles.logItemDate}>
+          {new Date(item.date + 'T' + item.startTime.replace(/\s[AP]M$/, '')).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} at {item.startTime}
+        </Text>
         <Text style={styles.logItemDuration}><MaterialIcons name="timer" size={14} color={stensylColors.primaryAccent} /> {item.duration}</Text>
       </View>
       <Text style={styles.logItemSubject}>{item.subject}: <Text style={styles.logItemTopic}>{item.topic}</Text></Text>
       {item.notes && <Text style={styles.logItemNotes}>Notes: {item.notes}</Text>}
-      <View style={styles.logItemFooter}>
-        <Text style={styles.logItemStartTime}>Started at: {item.startTime}</Text>
-        {/* Add edit/delete buttons here if needed in the future */}
+      <View style={styles.logItemDetailsRow}>
+        {item.mode && <Text style={styles.logItemMeta}>Mode: {item.mode}</Text>}
+        {item.efficiency !== undefined && <Text style={styles.logItemMeta}>Efficiency: {item.efficiency}/10</Text>}
       </View>
     </View>
   );
@@ -52,58 +62,39 @@ const StudyLogItem: React.FC<{ item: StudyLogEntry }> = ({ item }) => {
 
 
 const StudyLogScreen = () => {
-  // Placeholder data for study log entries
-  const [studySessions, setStudySessions] = useState<StudyLogEntry[]>([
-    {
-      id: '1',
-      date: '2025-05-28',
-      startTime: '10:00 AM',
-      duration: '2h 30m',
-      subject: 'React Native Development',
-      topic: 'Expo Router & Navigation',
-      notes: 'Worked on dynamic routing for the comments section.',
-    },
-    {
-      id: '2',
-      date: '2025-05-27',
-      startTime: '2:00 PM',
-      duration: '1h 45m',
-      subject: 'Calculus II',
-      topic: 'Integration Techniques',
-      notes: 'Reviewed partial fractions and trigonometric substitution.',
-    },
-    {
-      id: '3',
-      date: '2025-05-27',
-      startTime: '9:30 AM',
-      duration: '0h 50m',
-      subject: 'Data Structures',
-      topic: 'Big O Notation Review',
-    },
-    {
-      id: '4',
-      date: '2025-05-26',
-      startTime: '6:00 PM',
-      duration: '3h 10m',
-      subject: 'App Design Principles',
-      topic: 'User Interface & Experience',
-      notes: 'Sketched wireframes for the new feed layout.',
-    },
-    {
-      id: '5',
-      date: '2025-05-25',
-      startTime: '11:00 AM',
-      duration: '2h 00m',
-      subject: 'React Native Development',
-      topic: 'State Management (Zustand)',
-      notes: 'Implemented global state for user authentication.',
-    },
-  ]);
+  const [studySessions, setStudySessions] = useState<StudyLogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // In a real app, you would fetch this data
-  useEffect(() => {
-    // fetchStudyLogData().then(data => setStudySessions(data));
+  const loadStudySessions = useCallback(async () => {
+    console.log("Attempting to load study sessions from AsyncStorage...");
+    setIsLoading(true);
+    try {
+      const sessionsJson = await AsyncStorage.getItem(ASYNC_STORAGE_STUDY_LOG_KEY);
+      if (sessionsJson !== null) {
+        const loadedSessions = JSON.parse(sessionsJson);
+        console.log("Loaded sessions:", loadedSessions.length);
+        setStudySessions(loadedSessions);
+      } else {
+        console.log("No sessions found in AsyncStorage.");
+        setStudySessions([]); 
+      }
+    } catch (e) {
+      console.error("Failed to load study sessions from AsyncStorage", e);
+      setStudySessions([]); 
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  // Load sessions when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadStudySessions();
+      return () => {
+        // Optional: cleanup if needed when screen loses focus
+      };
+    }, [loadStudySessions])
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -114,7 +105,13 @@ const StudyLogScreen = () => {
           headerStyle: { backgroundColor: stensylColors.headerBackground },
           headerTintColor: stensylColors.iconWhite,
           headerTitleStyle: { color: stensylColors.textWhite },
-          headerBackTitle: "",
+          headerBackTitleVisible: false, // Hides "Back" text on iOS
+          // Optional: Add a manual refresh button to the header
+          // headerRight: () => (
+          //   <TouchableOpacity onPress={loadStudySessions} style={{ marginRight: 15 }}>
+          //     <MaterialIcons name="refresh" size={26} color={stensylColors.iconWhite} />
+          //   </TouchableOpacity>
+          // ),
         }} 
       />
       
@@ -127,11 +124,17 @@ const StudyLogScreen = () => {
           <Text style={styles.pageTitle}>My Study Log</Text>
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.placeholderText}>No study sessions logged yet.</Text>
-            <Text style={styles.placeholderText}>Start tracking your studies!</Text>
-          </View>
+          isLoading ? (
+            <View style={styles.emptyContainer}><Text style={styles.placeholderText}>Loading sessions...</Text></View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.placeholderText}>No study sessions logged yet.</Text>
+              <Text style={styles.placeholderText}>Track a session to see it here!</Text>
+            </View>
+          )
         }
+        refreshing={isLoading} 
+        onRefresh={loadStudySessions} // Enable pull-to-refresh
       />
     </SafeAreaView>
   );
@@ -146,22 +149,22 @@ const styles = StyleSheet.create({
   },
   listContentContainer: {
     paddingHorizontal: pageHorizontalPadding,
-    paddingBottom: 20, // Space at the end of the list
+    paddingBottom: 20, 
   },
   pageTitle: {
-    fontSize: 24, // Made title a bit larger
+    fontSize: 24, 
     fontWeight: 'bold',
     color: stensylColors.textWhite,
-    marginTop: 20, // Space from header
+    marginTop: 20, 
     marginBottom: 20,
-    textAlign: 'left', // Align to the left
+    textAlign: 'left', 
   },
   logItemContainer: {
     backgroundColor: stensylColors.cardBackground,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#000', // Optional shadow for depth
+    shadowColor: '#000', 
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -177,21 +180,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: stensylColors.textWhite,
+    flexShrink: 1, 
   },
   logItemDuration: {
     fontSize: 14,
     color: stensylColors.primaryAccent,
     fontWeight: '500',
+    marginLeft: 8,
   },
   logItemSubject: {
-    fontSize: 16,
+    fontSize: 17, 
     fontWeight: 'bold',
     color: stensylColors.textWhite,
     marginBottom: 4,
   },
   logItemTopic: {
     fontWeight: 'normal',
-    color: stensylColors.textMuted, // Different color for topic
+    fontSize: 15, 
+    color: stensylColors.textMuted, 
   },
   logItemNotes: {
     fontSize: 14,
@@ -200,28 +206,35 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 8,
   },
-  logItemFooter: {
+  logItemDetailsRow: { 
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap', // Allow items to wrap if too long
     marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
     paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)', // More subtle separator
   },
-  logItemStartTime: {
+  logItemMeta: {
     fontSize: 12,
     color: stensylColors.textMuted,
+    marginRight: 10, // Add some space between meta items if they wrap
+    marginBottom: 4, // Space if they wrap to new line
   },
   emptyContainer: {
-    flex: 1,
+    flex: 1, // Ensure it can take space if list is empty
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 50, // Give some space if the list is empty
+    paddingTop: 50, 
+    paddingBottom: 50,
   },
   placeholderText: {
     fontSize: 16,
-    color: stensylColors.textMuted, // Use muted color
+    color: stensylColors.textMuted, 
     textAlign: 'center',
     lineHeight: 24,
   },
 });
 
 export default StudyLogScreen;
+
