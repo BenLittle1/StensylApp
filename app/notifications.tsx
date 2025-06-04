@@ -76,8 +76,12 @@ const NotificationItem: React.FC<{ item: NotificationItemData; onPress: () => vo
       <View style={styles.notificationContent}>
         <Text style={styles.notificationText}>
           <Text style={styles.userName}>{item.user.name}</Text> {actionText}.
-          {item.postSnippet && <Text style={styles.snippetText}> "{item.postSnippet}"</Text>}
-          {item.commentSnippet && <Text style={styles.snippetText}> "{item.commentSnippet}"</Text>}
+          {item.postSnippet && (
+            <Text style={styles.snippetText}>&quot;{item.postSnippet}&quot;</Text>
+          )}
+          {item.commentSnippet && (
+            <Text style={styles.snippetText}>&quot;{item.commentSnippet}&quot;</Text>
+          )}
         </Text>
         <Text style={styles.timestamp}>{item.timestamp}</Text>
       </View>

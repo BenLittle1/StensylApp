@@ -110,7 +110,7 @@ const StensylSigninScreen = () => {
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
+            <Text style={styles.signupText}>Don&apos;t have an account? </Text>
             <Link href={"/signup" as any} asChild>
               {/* Ensure you have an app/signup.tsx file or adjust href */}
               <TouchableOpacity activeOpacity={0.7}>
