@@ -1,75 +1,192 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import React, { useState, useCallback } from 'react';
+import {
+  FlatList,
+  StyleSheet,
+  Text,
+  View
+} from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { stensylColors } from '@/constants/Colors';
+import DayBox from '@/components/DayBox';
+import PostItem, { PostItemProps } from '@/components/PostItem';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+// AsyncStorage key, ensure this matches the one in StudyTrackerScreen.tsx
+const ASYNC_STORAGE_STUDY_LOG_KEY = '@StudyLogSessions_StensylApp';
 
-export default function HomeScreen() {
+// Define the structure of log entries as stored by StudyTrackerScreen
+interface StudyLogEntry {
+  id: string;
+  date: string;
+  startTime: string;
+  duration: string;
+  subject: string;
+  topic: string;
+  notes?: string;
+  mode?: string; // 'Stopwatch' | 'Pomodoro'
+  efficiency?: number;
+}
+
+// Function to transform StudyLogEntry to PostItemProps
+const transformLogEntryToPostItem = (logEntry: StudyLogEntry): PostItemProps => {
+  return {
+    id: logEntry.id,
+    userName: "You", // Placeholder for now
+    timestamp: `${logEntry.date} ${logEntry.startTime}`,
+    location: "Local Session", // Placeholder for now
+    timeStudied: logEntry.duration,
+    description: `${logEntry.topic}\nSubject: ${logEntry.subject}${logEntry.notes ? `\nNotes: ${logEntry.notes}` : ''}`,
+    // avatarUrl can be added later if available
+  };
+};
+
+export default function FeedScreen() {
+  const [studyStreak, setStudyStreak] = useState(12);
+  const [weeklyStudyDays, setWeeklyStudyDays] = useState([
+    true, true, false, true, false, true, false
+  ]);
+  const dayInitials = ["M", "T", "W", "T", "F", "S", "S"];
+
+  const jsDayOfWeek = new Date().getDay(); // Sunday = 0, Monday = 1, ..., Saturday = 6
+  let actualCurrentDayIndexInArray: number;
+  if (jsDayOfWeek === 0) { // If today is Sunday
+    actualCurrentDayIndexInArray = 6; // 'S' (Sunday) is at index 6 in your array
+  } else { // If today is Monday through Saturday
+    actualCurrentDayIndexInArray = jsDayOfWeek - 1; // Monday (1) -> index 0, Tuesday (2) -> index 1, etc.
+  }
+
+  const [posts, setPosts] = useState<PostItemProps[]>([]);
+
+  // Load posts from AsyncStorage when the screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      const loadPosts = async () => {
+        try {
+          const existingSessionsJson = await AsyncStorage.getItem(ASYNC_STORAGE_STUDY_LOG_KEY);
+          if (existingSessionsJson) {
+            const existingSessions: StudyLogEntry[] = JSON.parse(existingSessionsJson);
+            // Entries are saved with newest first, so we might not need to reverse
+            // If older entries are needed first, then: .reverse()
+            const fetchedPosts = existingSessions.map(transformLogEntryToPostItem);
+            setPosts(fetchedPosts);
+          } else {
+            setPosts([]); // No posts found
+          }
+        } catch (e) {
+          console.error("Failed to load sessions from AsyncStorage", e);
+          setPosts([]); // Set to empty on error
+        }
+      };
+
+      loadPosts();
+
+      return () => {
+        // Optional: Cleanup function when the screen is unfocused
+        // For example, if you had listeners or subscriptions
+      };
+    }, [])
+  );
+
+  const renderPost = ({ item }: { item: PostItemProps }) => <PostItem {...item} />;
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <FlatList
+      style={styles.screenBackground}
+      data={posts}
+      renderItem={renderPost}
+      keyExtractor={item => item.id}
+      ListEmptyComponent={
+        <View style={styles.emptyFeedContainer}>
+          <Text style={styles.emptyFeedText}>No study sessions logged yet.</Text>
+          <Text style={styles.emptyFeedSubText}>Go to the "Study" tab to track a new session!</Text>
+        </View>
+      }
+      ListHeaderComponent={
+        <View style={styles.feedHeaderContent}>
+          {/* Weekly Progress Section */}
+          <View style={styles.weeklyProgressContainer}>
+            <View style={styles.dayBoxesContainer}>
+              {dayInitials.map((initial, index) => (
+                <DayBox
+                  key={index}
+                  dayInitial={initial}
+                  studied={weeklyStudyDays[index]}
+                  isCurrentDay={index === actualCurrentDayIndexInArray}
+                />
+              ))}
+            </View>
+            <View style={styles.streakInfoContainer}>
+              <MaterialIcons name="local-fire-department" size={22} color={stensylColors.primaryAccent} style={styles.streakIcon} />
+              <Text style={styles.streakText}>{studyStreak}</Text>
+            </View>
+          </View>
+        </View>
+      }
+      contentContainerStyle={styles.feedListContainer}
+    />
   );
 }
 
+const pageHorizontalPadding = 16;
+
 const styles = StyleSheet.create({
-  titleContainer: {
+  screenBackground: {
+    flex: 1,
+    backgroundColor: stensylColors.background,
+  },
+  feedHeaderContent: {
+    paddingHorizontal: pageHorizontalPadding,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: stensylColors.background,
+  },
+  weeklyProgressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    backgroundColor: stensylColors.cardBackground,
+    borderRadius: 12,
+    padding: pageHorizontalPadding,
+    marginBottom: 16,
   },
-  stepContainer: {
-    gap: 8,
+  dayBoxesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  streakInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  streakIcon: {
+    marginRight: 5,
+  },
+  streakText: {
+    color: stensylColors.textWhite,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  feedListContainer: {
+    paddingBottom: 10,
+    flexGrow: 1,
+  },
+  emptyFeedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    marginTop: 50,
+  },
+  emptyFeedText: {
+    fontSize: 18,
+    color: stensylColors.textWhite,
+    fontWeight: 'bold',
+    textAlign: 'center',
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  emptyFeedSubText: {
+    fontSize: 14,
+    color: stensylColors.textMuted,
+    textAlign: 'center',
   },
 });

@@ -24,3 +24,23 @@ export const Colors = {
     tabIconSelected: tintColorDark,
   },
 };
+
+export const stensylColors = {
+  background: '#101a23',
+  textWhite: '#ffffff',
+  iconWhite: '#ffffff',
+  primaryAccent: '#0b80ee',
+  cardBackground: '#1a2633',
+  inputBackground: '#223649',
+  textMuted: '#90aecb',
+  successGreen: '#48BB78',
+  errorRed: '#E53E3E',
+  disabledButton: '#4A5568',
+  toggleActive: '#0b80ee',
+  toggleInactive: '#394B59',
+  modalOptionSelected: 'rgba(11, 128, 238, 0.2)',
+  studyDayFilled: '#0b80ee',
+  studyDayEmpty: 'rgba(255, 255, 255, 0.15)',
+  postPlaceholderBg: '#394B59',
+  iconColor: '#90aecb',
+};
