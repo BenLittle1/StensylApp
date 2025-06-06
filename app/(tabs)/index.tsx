@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -11,15 +11,16 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { stensylColors } from '@/constants/Colors';
 import DayBox from '@/components/DayBox';
-import PostItem from '@/components/PostItem'; // PostItemProps is now inferred from the component
-import { supabase } from '@/lib/supabase'; // Import Supabase client
+import PostItem from '@/components/PostItem';
+import type { PostItemProps } from '@/components/PostItem';
+import { supabase } from '@/lib/supabase';
 
-// Define the structure of posts coming from the Supabase table
-export interface Post {
-  id: string; // uuid
-  user_id: string; // uuid
+// Define the structure of posts coming directly from Supabase DB
+interface SupabasePost {
+  id: string;
+  user_id: string;
   user_name: string | null;
-  created_at: string; // timestamptz
+  created_at: string;
   topic: string;
   subject: string;
   duration: string;
@@ -28,68 +29,135 @@ export interface Post {
   efficiency: number | null;
 }
 
-// Updated transform function
-const transformSupabasePost = (post: Post): any => { // Using 'any' for PostItemProps flexibility
+const transformSupabasePost = (post: SupabasePost): Omit<PostItemProps, 'onDelete'> => {
   return {
     id: post.id,
     userName: post.user_name || 'Anonymous',
     timestamp: new Date(post.created_at).toLocaleString(),
-    location: "Online", // Placeholder
+    location: "Online",
     timeStudied: post.duration,
     description: `${post.topic}\nSubject: ${post.subject}${post.notes ? `\nNotes: ${post.notes}` : ''}`,
+    userId: post.user_id,
   };
 };
 
+const calculateStudyStreak = (posts: SupabasePost[]): number => {
+    if (posts.length === 0) return 0;
+  
+    const studyDates = [
+      ...new Set(
+        posts.map((post) => new Date(post.created_at).toISOString().split('T')[0])
+      ),
+    ].sort((a, b) => b.localeCompare(a));
+  
+    if (studyDates.length === 0) return 0;
+  
+    let streak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+  
+    const firstStudyDate = new Date(studyDates[0]);
+    firstStudyDate.setHours(0, 0, 0, 0);
+  
+    const diffFromToday = (today.getTime() - firstStudyDate.getTime()) / (1000 * 60 * 60 * 24);
+  
+    if (diffFromToday > 1) {
+      return 0; // The last study session was not today or yesterday, so streak is broken.
+    }
+  
+    streak = 1;
+    for (let i = 0; i < studyDates.length - 1; i++) {
+      const currentDay = new Date(studyDates[i]);
+      const nextDay = new Date(studyDates[i + 1]);
+      const diffTime = currentDay.getTime() - nextDay.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  
+      if (diffDays === 1) {
+        streak++;
+      } else {
+        break; 
+      }
+    }
+    return streak;
+};
+
 export default function FeedScreen() {
-  const [posts, setPosts] = useState<any[]>([]); // Using 'any' for now
+  const [posts, setPosts] = useState<SupabasePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [studyStreak, setStudyStreak] = useState(12);
-  const [weeklyStudyDays, setWeeklyStudyDays] = useState([
-    true, true, false, true, false, true, false
-  ]);
-  const dayInitials = ["M", "T", "W", "T", "F", "S", "S"];
-
-  const jsDayOfWeek = new Date().getDay();
-  let actualCurrentDayIndexInArray: number;
-  if (jsDayOfWeek === 0) {
-    actualCurrentDayIndexInArray = 6;
-  } else {
-    actualCurrentDayIndexInArray = jsDayOfWeek - 1;
-  }
-
-  const fetchPosts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .order('created_at', { ascending: false }); // Fetch newest posts first
-
-      if (error) throw error;
-
-      if (data) {
-        setPosts(data.map(transformSupabasePost));
-      }
-    } catch (e: any) {
-      console.error("Failed to fetch posts from Supabase", e);
-      // Optionally set an error state to show in the UI
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
+      let isActive = true;
+
+      const fetchPosts = async () => {
+        if (!refreshing) {
+            setLoading(true);
+        }
+        try {
+          const { data, error } = await supabase
+            .from('posts')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (isActive) {
+            if (error) throw error;
+            setPosts(data || []);
+          }
+        } catch (e: any) {
+          if (isActive) console.error("Failed to fetch posts from Supabase", e);
+        } finally {
+          if (isActive) {
+            setLoading(false);
+            setRefreshing(false);
+          }
+        }
+      };
+
       fetchPosts();
-    }, [])
+
+      return () => {
+        isActive = false;
+      };
+    }, [refreshing])
   );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchPosts();
   }, []);
+
+  // New handler for deleting a post from the state
+  const handleDeletePost = (deletedPostId: string) => {
+    setPosts(currentPosts => currentPosts.filter(post => post.id !== deletedPostId));
+  };
+
+  const userStats = useMemo(() => {
+    const studyStreak = calculateStudyStreak(posts);
+    const last7DaysBools = [];
+    for(let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setHours(0,0,0,0);
+        d.setDate(d.getDate() - i);
+        last7DaysBools.push(
+            posts.some(p => {
+                const pDate = new Date(p.created_at);
+                pDate.setHours(0,0,0,0);
+                return pDate.getTime() === d.getTime();
+            })
+        )
+    }
+
+    return {
+      studyStreak,
+      weeklyStudyDays: last7DaysBools,
+    };
+  }, [posts]);
+
+  // Pass userId and onDelete to the transformed data
+  const transformedPosts = posts.map(post => ({
+    ...transformSupabasePost(post),
+    onDelete: handleDeletePost,
+  }));
 
   if (loading && posts.length === 0) {
     return (
@@ -102,14 +170,14 @@ export default function FeedScreen() {
   return (
     <FlatList
       style={styles.screenBackground}
-      data={posts}
+      data={transformedPosts}
       renderItem={({ item }) => <PostItem {...item} />}
       keyExtractor={(item) => item.id}
       ListEmptyComponent={
         !loading ? (
           <View style={styles.emptyFeedContainer}>
-            <Text style={styles.emptyFeedText}>The feed is empty.</Text>
-            <Text style={styles.emptyFeedSubText}>Be the first to post a study session!</Text>
+            <Text style={styles.emptyFeedText}>No study sessions yet.</Text>
+            <Text style={styles.emptyFeedSubText}>Go to the "Study" tab to log your first session!</Text>
           </View>
         ) : null
       }
@@ -122,21 +190,28 @@ export default function FeedScreen() {
       }
       ListHeaderComponent={
         <View style={styles.feedHeaderContent}>
-          {/* Weekly Progress Section */}
           <View style={styles.weeklyProgressContainer}>
             <View style={styles.dayBoxesContainer}>
-              {dayInitials.map((initial, index) => (
-                <DayBox
-                  key={index}
-                  dayInitial={initial}
-                  studied={weeklyStudyDays[index]}
-                  isCurrentDay={index === actualCurrentDayIndexInArray}
-                />
-              ))}
+              {["S", "M", "T", "W", "T", "F", "S"].map((initial, index) => {
+                  const dayIndex = new Date().getDay();
+                  // Simplified mapping, could be more robust
+                  const displayDays = ['S','M','T','W','T','F','S'];
+                  const todayIndex = new Date().getDay();
+                  // This is a simple visual mapping, not a calendar.
+                  // It shows activity for the last 7 calendar days.
+                  return (
+                    <DayBox
+                      key={index}
+                      dayInitial={displayDays[index]}
+                      studied={userStats.weeklyStudyDays[index]}
+                      isCurrentDay={index === 6} // The last box always represents today
+                    />
+                  )
+              })}
             </View>
             <View style={styles.streakInfoContainer}>
               <MaterialIcons name="local-fire-department" size={22} color={stensylColors.primaryAccent} style={styles.streakIcon} />
-              <Text style={styles.streakText}>{studyStreak}</Text>
+              <Text style={styles.streakText}>{userStats.studyStreak}</Text>
             </View>
           </View>
         </View>

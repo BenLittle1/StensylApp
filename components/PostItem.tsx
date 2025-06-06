@@ -5,13 +5,16 @@ import {
   StyleSheet,
   TouchableOpacity,
   Share,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Href, useRouter } from 'expo-router';
 import { stensylColors } from '@/constants/Colors'; // Adjusted import path
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 // Post Item Component
-interface PostItemProps {
+export interface PostItemProps {
   id: string;
   userName: string;
   avatarUrl?: string; // Kept as optional
@@ -19,6 +22,8 @@ interface PostItemProps {
   location: string;
   timeStudied: string;
   description: string;
+  userId: string; // Add userId to check ownership
+  onDelete?: (id: string) => void; // Optional callback to refresh feed
 }
 
 const PostItem: React.FC<PostItemProps> = ({
@@ -29,8 +34,11 @@ const PostItem: React.FC<PostItemProps> = ({
   location,
   timeStudied,
   description,
+  userId,
+  onDelete,
 }) => {
   const router = useRouter();
+  const { user } = useAuth(); // Get current user
 
   const handleCommentPress = () => {
     console.log(`Attempting to navigate to comments for post ID: ${id}.`);
@@ -62,6 +70,36 @@ const PostItem: React.FC<PostItemProps> = ({
     }
   };
 
+  const handleDeletePress = async () => {
+    Alert.alert(
+      "Delete Post",
+      "Are you sure you want to permanently delete this study session?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('posts')
+                .delete()
+                .eq('id', id);
+              if (error) throw error;
+              
+              if (onDelete) {
+                onDelete(id); // Trigger feed refresh
+              }
+
+            } catch (e: any) {
+              Alert.alert("Deletion Failed", e.message);
+            }
+          } 
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.postContainer}>
       {/* Post Header */}
@@ -78,6 +116,13 @@ const PostItem: React.FC<PostItemProps> = ({
           <Text style={styles.postTimeStudiedLabel}>Time Studied</Text>
           <Text style={styles.postTimeStudiedValue}>{timeStudied}</Text>
         </View>
+        
+        {/* Show delete icon only if the current user owns the post */}
+        {user && user.id === userId && (
+          <TouchableOpacity onPress={handleDeletePress} style={styles.deleteButton}>
+            <MaterialIcons name="delete-outline" size={24} color={stensylColors.errorRed} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Post Description */}
@@ -174,6 +219,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
     paddingRight: 20,
+  },
+  deleteButton: {
+    marginLeft: 10,
+    padding: 5,
   },
 });
 

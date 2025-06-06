@@ -71,7 +71,7 @@ const StudyTrackerScreen = () => {
 
   const [loading, setLoading] = useState(false);
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<number | null>(null);
 
   const resetPomodoro = useCallback((startPhase: PomodoroPhase = 'Study') => {
     setIsTimerActive(false);
@@ -95,7 +95,7 @@ const StudyTrackerScreen = () => {
             return prevSeconds - 1;
           });
         }
-      }, 1000);
+      }, 1000) as unknown as number;
     } else if (!isTimerActive && intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
