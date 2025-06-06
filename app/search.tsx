@@ -168,7 +168,9 @@ const SearchScreen = () => {
           keyExtractor={(item) => item.id}
           ListEmptyComponent={
             <View style={styles.emptyResultsContainer}>
-              <Text style={styles.placeholderText}>No results found for "{searchText}"</Text>
+              <Text style={styles.placeholderText}>
+                No results found for &quot;{searchText}&quot;
+              </Text>
             </View>
           }
           contentContainerStyle={styles.resultsListContainer}
