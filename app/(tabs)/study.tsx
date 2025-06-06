@@ -18,6 +18,8 @@ import {
 } from 'react-native';
 import { stensylColors } from '@/constants/Colors'; // Adjusted import path
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'; // Added import
+import { useAuth } from '@/context/AuthContext'; // Import useAuth
+import { supabase } from '@/lib/supabase'; // Import Supabase client
 
 // Helper function to format time (always HH:MM:SS if hours > 0 for stopwatch)
 const formatStopwatchTime = (totalSeconds: number): string => {
@@ -48,21 +50,8 @@ type PomodoroPhase = 'Study' | 'Break';
 
 const pomodoroDurationOptions = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
 
-interface StudyLogEntry {
-  id: string;
-  date: string;
-  startTime: string;
-  duration: string;
-  subject: string;
-  topic: string;
-  notes?: string;
-  mode?: TimerMode;
-  efficiency?: number;
-}
-
-const ASYNC_STORAGE_STUDY_LOG_KEY = '@StudyLogSessions_StensylApp';
-
 const StudyTrackerScreen = () => {
+  const { user } = useAuth();
   const router = useRouter();
   const tabBarHeight = useBottomTabBarHeight(); // Get tab bar height
   const [isTimerActive, setIsTimerActive] = useState(false);
@@ -79,6 +68,8 @@ const StudyTrackerScreen = () => {
   const [subjectStudied, setSubjectStudied] = useState('');
   const [efficiencyScore, setEfficiencyScore] = useState('');
   const [sessionDescription, setSessionDescription] = useState('');
+
+  const [loading, setLoading] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -141,41 +132,50 @@ const StudyTrackerScreen = () => {
     }
     const score = parseInt(efficiencyScore, 10);
     if (efficiencyScore.trim() && (isNaN(score) || score < 1 || score > 10)) {
-      Alert.alert("Invalid Score", "Efficiency score must be a number between 1 and 10.");
+        Alert.alert("Invalid Score", "Efficiency score must be a number between 1 and 10.");
+        return;
+    }
+    if (!user) { // Check if user is available
+      Alert.alert("Error", "You must be logged in to save a session.");
       return;
     }
 
-    const now = new Date();
-    const newEntry: StudyLogEntry = {
-      id: Date.now().toString(),
-      date: now.toISOString().split('T')[0],
-      startTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      duration: formatStopwatchTime(stopwatchSeconds),
-      subject: subjectStudied.trim(),
+    setLoading(true); // Assuming you add a 'loading' state for the modal save button
+
+    const postData = {
+      user_id: user.id,
+      user_name: user.user_metadata?.full_name || user.email,
       topic: sessionName.trim(),
-      notes: sessionDescription.trim() || undefined,
+      subject: subjectStudied.trim(),
+      duration: formatStopwatchTime(stopwatchSeconds),
+      notes: sessionDescription.trim() || null,
       mode: timerMode,
-      efficiency: efficiencyScore.trim() ? score : undefined,
+      efficiency: efficiencyScore.trim() ? score : null,
     };
 
     try {
-      const existingSessionsJson = await AsyncStorage.getItem(ASYNC_STORAGE_STUDY_LOG_KEY);
-      const existingSessions: StudyLogEntry[] = existingSessionsJson ? JSON.parse(existingSessionsJson) : [];
-      const updatedSessions = [newEntry, ...existingSessions];
-      await AsyncStorage.setItem(ASYNC_STORAGE_STUDY_LOG_KEY, JSON.stringify(updatedSessions));
+      const { error } = await supabase.from('posts').insert(postData);
 
-      Alert.alert("Session Saved!", `\"${newEntry.topic}\" for ${newEntry.subject} (${newEntry.duration}) logged.`);
+      if (error) {
+        throw error;
+      }
 
-      setStopwatchSeconds(0); resetPomodoro('Study');
-      setSessionName(''); setSubjectStudied('');
-      setEfficiencyScore(''); setSessionDescription('');
+      Alert.alert("Session Saved!", `Your study session has been posted to the feed.`);
+
+      setStopwatchSeconds(0);
+      resetPomodoro('Study');
+      setSessionName('');
+      setSubjectStudied('');
+      setEfficiencyScore('');
+      setSessionDescription('');
       setIsEndSessionModalVisible(false);
-      
-      router.push('/(tabs)'); // Navigate to home/feed tab
+      router.push('/(tabs)');
 
-    } catch (e) {
-      console.error("Failed to save session to AsyncStorage", e);
-      Alert.alert("Save Error", "Could not save your study session. Please try again.");
+    } catch (e: any) {
+      console.error("Failed to save session to Supabase", e);
+      Alert.alert("Save Error", e.message || "Could not save your study session. Please try again.");
+    } finally {
+      setLoading(false); // End loading
     }
   };
 
@@ -342,8 +342,12 @@ const StudyTrackerScreen = () => {
                 <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={handleCancelSave}>
                   <Text style={styles.modalButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleSaveSession}>
-                  <Text style={styles.modalButtonText}>Save Session</Text>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton, loading && styles.disabledButtonState]}
+                  onPress={handleSaveSession}
+                  disabled={loading}
+                >
+                  <Text style={styles.modalButtonText}>{loading ? 'Saving...' : 'Save Session'}</Text>
                 </TouchableOpacity>
               </View>
             </View>

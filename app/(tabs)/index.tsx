@@ -4,103 +4,121 @@ import {
   FlatList,
   StyleSheet,
   Text,
-  View
+  View,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { stensylColors } from '@/constants/Colors';
 import DayBox from '@/components/DayBox';
-import PostItem, { PostItemProps } from '@/components/PostItem';
+import PostItem from '@/components/PostItem'; // PostItemProps is now inferred from the component
+import { supabase } from '@/lib/supabase'; // Import Supabase client
 
-// AsyncStorage key, ensure this matches the one in StudyTrackerScreen.tsx
-const ASYNC_STORAGE_STUDY_LOG_KEY = '@StudyLogSessions_StensylApp';
-
-// Define the structure of log entries as stored by StudyTrackerScreen
-interface StudyLogEntry {
-  id: string;
-  date: string;
-  startTime: string;
-  duration: string;
-  subject: string;
+// Define the structure of posts coming from the Supabase table
+export interface Post {
+  id: string; // uuid
+  user_id: string; // uuid
+  user_name: string | null;
+  created_at: string; // timestamptz
   topic: string;
-  notes?: string;
-  mode?: string; // 'Stopwatch' | 'Pomodoro'
-  efficiency?: number;
+  subject: string;
+  duration: string;
+  notes: string | null;
+  mode: string | null;
+  efficiency: number | null;
 }
 
-// Function to transform StudyLogEntry to PostItemProps
-const transformLogEntryToPostItem = (logEntry: StudyLogEntry): PostItemProps => {
+// Updated transform function
+const transformSupabasePost = (post: Post): any => { // Using 'any' for PostItemProps flexibility
   return {
-    id: logEntry.id,
-    userName: "You", // Placeholder for now
-    timestamp: `${logEntry.date} ${logEntry.startTime}`,
-    location: "Local Session", // Placeholder for now
-    timeStudied: logEntry.duration,
-    description: `${logEntry.topic}\nSubject: ${logEntry.subject}${logEntry.notes ? `\nNotes: ${logEntry.notes}` : ''}`,
-    // avatarUrl can be added later if available
+    id: post.id,
+    userName: post.user_name || 'Anonymous',
+    timestamp: new Date(post.created_at).toLocaleString(),
+    location: "Online", // Placeholder
+    timeStudied: post.duration,
+    description: `${post.topic}\nSubject: ${post.subject}${post.notes ? `\nNotes: ${post.notes}` : ''}`,
   };
 };
 
 export default function FeedScreen() {
+  const [posts, setPosts] = useState<any[]>([]); // Using 'any' for now
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [studyStreak, setStudyStreak] = useState(12);
   const [weeklyStudyDays, setWeeklyStudyDays] = useState([
     true, true, false, true, false, true, false
   ]);
   const dayInitials = ["M", "T", "W", "T", "F", "S", "S"];
 
-  const jsDayOfWeek = new Date().getDay(); // Sunday = 0, Monday = 1, ..., Saturday = 6
+  const jsDayOfWeek = new Date().getDay();
   let actualCurrentDayIndexInArray: number;
-  if (jsDayOfWeek === 0) { // If today is Sunday
-    actualCurrentDayIndexInArray = 6; // 'S' (Sunday) is at index 6 in your array
-  } else { // If today is Monday through Saturday
-    actualCurrentDayIndexInArray = jsDayOfWeek - 1; // Monday (1) -> index 0, Tuesday (2) -> index 1, etc.
+  if (jsDayOfWeek === 0) {
+    actualCurrentDayIndexInArray = 6;
+  } else {
+    actualCurrentDayIndexInArray = jsDayOfWeek - 1;
   }
 
-  const [posts, setPosts] = useState<PostItemProps[]>([]);
+  const fetchPosts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .order('created_at', { ascending: false }); // Fetch newest posts first
 
-  // Load posts from AsyncStorage when the screen is focused
+      if (error) throw error;
+
+      if (data) {
+        setPosts(data.map(transformSupabasePost));
+      }
+    } catch (e: any) {
+      console.error("Failed to fetch posts from Supabase", e);
+      // Optionally set an error state to show in the UI
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
-      const loadPosts = async () => {
-        try {
-          const existingSessionsJson = await AsyncStorage.getItem(ASYNC_STORAGE_STUDY_LOG_KEY);
-          if (existingSessionsJson) {
-            const existingSessions: StudyLogEntry[] = JSON.parse(existingSessionsJson);
-            // Entries are saved with newest first, so we might not need to reverse
-            // If older entries are needed first, then: .reverse()
-            const fetchedPosts = existingSessions.map(transformLogEntryToPostItem);
-            setPosts(fetchedPosts);
-          } else {
-            setPosts([]); // No posts found
-          }
-        } catch (e) {
-          console.error("Failed to load sessions from AsyncStorage", e);
-          setPosts([]); // Set to empty on error
-        }
-      };
-
-      loadPosts();
-
-      return () => {
-        // Optional: Cleanup function when the screen is unfocused
-        // For example, if you had listeners or subscriptions
-      };
+      setLoading(true);
+      fetchPosts();
     }, [])
   );
 
-  const renderPost = ({ item }: { item: PostItemProps }) => <PostItem {...item} />;
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchPosts();
+  }, []);
+
+  if (loading && posts.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={stensylColors.primaryAccent} />
+      </View>
+    );
+  }
 
   return (
     <FlatList
       style={styles.screenBackground}
       data={posts}
-      renderItem={renderPost}
-      keyExtractor={item => item.id}
+      renderItem={({ item }) => <PostItem {...item} />}
+      keyExtractor={(item) => item.id}
       ListEmptyComponent={
-        <View style={styles.emptyFeedContainer}>
-          <Text style={styles.emptyFeedText}>No study sessions logged yet.</Text>
-          <Text style={styles.emptyFeedSubText}>Go to the "Study" tab to track a new session!</Text>
-        </View>
+        !loading ? (
+          <View style={styles.emptyFeedContainer}>
+            <Text style={styles.emptyFeedText}>The feed is empty.</Text>
+            <Text style={styles.emptyFeedSubText}>Be the first to post a study session!</Text>
+          </View>
+        ) : null
+      }
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={stensylColors.textWhite}
+        />
       }
       ListHeaderComponent={
         <View style={styles.feedHeaderContent}>
@@ -131,6 +149,12 @@ export default function FeedScreen() {
 const pageHorizontalPadding = 16;
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: stensylColors.background,
+  },
   screenBackground: {
     flex: 1,
     backgroundColor: stensylColors.background,
