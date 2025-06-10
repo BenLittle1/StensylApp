@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -15,7 +15,6 @@ import { supabase } from '@/lib/supabase'; // Adjusted import path
 import { stensylColors } from '@/constants/Colors'; // Adjusted import path
 
 export default function LoginScreen() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -81,7 +80,7 @@ export default function LoginScreen() {
           <Link href="/(auth)/signup" asChild>
             <TouchableOpacity>
               <Text style={styles.footerText}>
-                Don't have an account? <Text style={styles.linkText}>Sign Up</Text>
+                Don&apos;t have an account? <Text style={styles.linkText}>Sign Up</Text>
               </Text>
             </TouchableOpacity>
           </Link>

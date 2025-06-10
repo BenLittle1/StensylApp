@@ -14,6 +14,12 @@ import DayBox from '@/components/DayBox';
 import PostItem from '@/components/PostItem';
 import type { PostItemProps } from '@/components/PostItem';
 import { supabase } from '@/lib/supabase';
+import { FeedEmptyState } from '@/components/EmptyState';
+import { FeedLoadingState } from '@/components/LoadingStates';
+import { GoalProgress } from '@/components/GoalProgress';
+import { GoalSettingModal } from '@/components/GoalSetting';
+import { RecentSessions } from '@/components/RecentSessions';
+import { StudyStatusBadge } from '@/components/StudyStatusBadge';
 
 // Define the structure of posts coming directly from Supabase DB
 interface SupabasePost {
@@ -85,6 +91,7 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<SupabasePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [goalModalVisible, setGoalModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -160,27 +167,17 @@ export default function FeedScreen() {
   }));
 
   if (loading && posts.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={stensylColors.primaryAccent} />
-      </View>
-    );
+    return <FeedLoadingState />;
   }
 
   return (
+    <>
     <FlatList
       style={styles.screenBackground}
       data={transformedPosts}
       renderItem={({ item }) => <PostItem {...item} />}
       keyExtractor={(item) => item.id}
-      ListEmptyComponent={
-        !loading ? (
-          <View style={styles.emptyFeedContainer}>
-            <Text style={styles.emptyFeedText}>No study sessions yet.</Text>
-            <Text style={styles.emptyFeedSubText}>Go to the "Study" tab to log your first session!</Text>
-          </View>
-        ) : null
-      }
+        ListEmptyComponent={!loading ? <FeedEmptyState /> : null}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -190,13 +187,14 @@ export default function FeedScreen() {
       }
       ListHeaderComponent={
         <View style={styles.feedHeaderContent}>
+            {/* Study Status Badge - shows when actively studying */}
+            <StudyStatusBadge isStudying={false} compact={true} />
+
           <View style={styles.weeklyProgressContainer}>
             <View style={styles.dayBoxesContainer}>
               {["S", "M", "T", "W", "T", "F", "S"].map((initial, index) => {
-                  const dayIndex = new Date().getDay();
                   // Simplified mapping, could be more robust
                   const displayDays = ['S','M','T','W','T','F','S'];
-                  const todayIndex = new Date().getDay();
                   // This is a simple visual mapping, not a calendar.
                   // It shows activity for the last 7 calendar days.
                   return (
@@ -214,10 +212,30 @@ export default function FeedScreen() {
               <Text style={styles.streakText}>{userStats.studyStreak}</Text>
             </View>
           </View>
+            
+            {/* Goals Section */}
+            <GoalProgress 
+              compact={true} 
+              onSetGoalPress={() => setGoalModalVisible(true)} 
+            />
+
+            {/* Recent Sessions Summary */}
+            <RecentSessions posts={posts} compact={true} />
         </View>
       }
       contentContainerStyle={styles.feedListContainer}
     />
+      
+      {/* Goal Setting Modal */}
+      <GoalSettingModal
+        visible={goalModalVisible}
+        onClose={() => setGoalModalVisible(false)}
+        onGoalSet={() => {
+          // Refresh goals when a new one is set
+          setRefreshing(true);
+        }}
+      />
+    </>
   );
 }
 

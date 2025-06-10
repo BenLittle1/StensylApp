@@ -1,5 +1,4 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router'; // Href might be needed if router.push is used with typed routes
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -20,6 +19,7 @@ import { stensylColors } from '@/constants/Colors'; // Adjusted import path
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'; // Added import
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import { supabase } from '@/lib/supabase'; // Import Supabase client
+import { GoalProgress } from '@/components/GoalProgress';
 
 // Helper function to format time (always HH:MM:SS if hours > 0 for stopwatch)
 const formatStopwatchTime = (totalSeconds: number): string => {
@@ -49,6 +49,15 @@ type TimerMode = 'Stopwatch' | 'Pomodoro';
 type PomodoroPhase = 'Study' | 'Break';
 
 const pomodoroDurationOptions = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
+
+// Add quick start preset options
+const quickStartOptions = [
+  { subject: 'Math', duration: 25, icon: 'calculate' },
+  { subject: 'Science', duration: 30, icon: 'science' },
+  { subject: 'English', duration: 20, icon: 'menu-book' },
+  { subject: 'History', duration: 25, icon: 'history-edu' },
+  { subject: 'Custom', duration: 25, icon: 'edit' },
+];
 
 const StudyTrackerScreen = () => {
   const { user } = useAuth();
@@ -199,6 +208,32 @@ const StudyTrackerScreen = () => {
     setIsDurationPickerVisible(false);
   };
 
+  const handleQuickStart = (option: typeof quickStartOptions[0]) => {
+    if (option.subject === 'Custom') {
+      // Just set the timer duration and let user start normally
+      if (timerMode === 'Pomodoro') {
+        const newDurationSeconds = option.duration * 60;
+        setCustomStudyDuration(newDurationSeconds);
+        setPomodoroSecondsLeft(newDurationSeconds);
+      }
+      setIsTimerActive(false);
+    } else {
+      // Pre-fill session form and start timer immediately
+      setSessionName(`${option.subject} Study Session`);
+      setSubjectStudied(option.subject);
+      
+      if (timerMode === 'Pomodoro') {
+        const newDurationSeconds = option.duration * 60;
+        setCustomStudyDuration(newDurationSeconds);
+        setPomodoroSecondsLeft(newDurationSeconds);
+        resetPomodoro('Study');
+      }
+      
+      // Auto-start the timer
+      setIsTimerActive(true);
+    }
+  };
+
   // const handleAdvancedStatsPress = () => {
   //   console.log("Advanced Statistics button pressed!");
   //   // router.push('/advancedstats' as Href);
@@ -238,6 +273,11 @@ const StudyTrackerScreen = () => {
             <Text style={[styles.modeLabel, timerMode === 'Pomodoro' && styles.modeLabelActive]}>Pomodoro</Text>
           </View>
 
+          {/* Goal Progress Display */}
+          <View style={styles.goalProgressContainer}>
+            <GoalProgress compact={true} />
+          </View>
+
           {timerMode === 'Pomodoro' && (
             <TouchableOpacity onPress={() => setIsDurationPickerVisible(true)} style={styles.durationDisplayTouchable}>
               <Text style={styles.durationDisplayText}>
@@ -245,6 +285,30 @@ const StudyTrackerScreen = () => {
               </Text>
               <MaterialIcons name="edit" size={16} color={stensylColors.textMuted} style={{ marginLeft: 5 }} />
             </TouchableOpacity>
+          )}
+
+          {/* Quick Start Buttons */}
+          {!isTimerActive && stopwatchSeconds === 0 && (
+            <View style={styles.quickStartContainer}>
+              <Text style={styles.quickStartTitle}>Quick Start</Text>
+              <View style={styles.quickStartGrid}>
+                {quickStartOptions.map((option, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.quickStartButton}
+                    onPress={() => handleQuickStart(option)}
+                  >
+                    <MaterialIcons 
+                      name={option.icon as any} 
+                      size={24} 
+                      color={stensylColors.primaryAccent} 
+                    />
+                    <Text style={styles.quickStartButtonText}>{option.subject}</Text>
+                    <Text style={styles.quickStartDurationText}>{option.duration}m</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           )}
 
           {timerMode === 'Stopwatch' && (
@@ -419,6 +483,11 @@ const styles = StyleSheet.create({
   modeToggleContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   modeLabel: { fontSize: 16, color: stensylColors.textMuted, marginHorizontal: 10 },
   modeLabelActive: { color: stensylColors.primaryAccent, fontWeight: 'bold' },
+  
+  goalProgressContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
 
   durationDisplayTouchable: {
     flexDirection: 'row',
@@ -433,6 +502,46 @@ const styles = StyleSheet.create({
     color: stensylColors.textMuted,
     fontSize: 14,
     fontWeight: '500',
+  },
+
+  quickStartContainer: {
+    width: '100%',
+    marginBottom: 30,
+  },
+  quickStartTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: stensylColors.textWhite,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  quickStartGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  quickStartButton: {
+    width: '30%',
+    aspectRatio: 1,
+    backgroundColor: stensylColors.cardBackground,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: stensylColors.inputBackground,
+  },
+  quickStartButtonText: {
+    color: stensylColors.textWhite,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  quickStartDurationText: {
+    color: stensylColors.textMuted,
+    fontSize: 10,
+    marginTop: 2,
   },
 
   timerDisplayContainer: {

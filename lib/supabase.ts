@@ -1,5 +1,5 @@
 import 'react-native-url-polyfill/auto';
-import { createClient, SupabaseClientOptions, StorageAdapter } from '@supabase/supabase-js';
+import { createClient, SupabaseClientOptions } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -9,6 +9,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
     'Supabase URL or Anon Key is missing. Ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set in your environment.'
   );
+}
+
+interface StorageAdapter {
+  getItem: (key: string) => Promise<string | null>;
+  setItem: (key: string, value: string) => Promise<void>;
+  removeItem: (key: string) => Promise<void>;
 }
 
 let storage: StorageAdapter;

@@ -1,10 +1,13 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { StyleSheet, Text, View, Button, SafeAreaView, Alert, ActivityIndicator, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, Alert, ActivityIndicator, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { stensylColors } from '@/constants/Colors';
 import { Stack, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { LineChart, ContributionGraph, PieChart } from "react-native-chart-kit";
+import { GoalProgress } from '@/components/GoalProgress';
+import { GoalSettingModal } from '@/components/GoalSetting';
+import { StensylScore } from '@/components/StensylScore';
 
 // Local type definition for Posts, matching the data structure
 interface Post {
@@ -158,6 +161,7 @@ export default function ProfileScreen() {
   const { signOut, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [goalModalVisible, setGoalModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -196,7 +200,7 @@ export default function ProfileScreen() {
       return () => {
         isActive = false;
       };
-    }, [user])
+    }, [user, posts.length])
   );
 
   const totalSessions = posts.length;
@@ -262,6 +266,18 @@ export default function ProfileScreen() {
             <StatBox label="Avg. Session" value={`${formatTotalTime(averageSessionSeconds)}`} />
           </View>
 
+          {/* Stensyl Score Section */}
+          <View style={styles.goalsSection}>
+            <Text style={styles.sectionTitle}>Your Stensyl Score</Text>
+            <StensylScore showLeaderboard={true} />
+          </View>
+
+          {/* Goals Section */}
+          <View style={styles.goalsSection}>
+            <Text style={styles.sectionTitle}>Your Goals</Text>
+            <GoalProgress onSetGoalPress={() => setGoalModalVisible(true)} />
+          </View>
+
           {/* Horizontal ScrollView for Charts */}
           <ScrollView
             horizontal
@@ -320,6 +336,15 @@ export default function ProfileScreen() {
           </Text>
         </ScrollView>
       )}
+      
+      {/* Goal Setting Modal */}
+      <GoalSettingModal
+        visible={goalModalVisible}
+        onClose={() => setGoalModalVisible(false)}
+        onGoalSet={() => {
+          // Modal will close automatically after setting goal
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -400,5 +425,15 @@ const styles = StyleSheet.create({
     color: stensylColors.textMuted,
     marginTop: 20,
     fontStyle: 'italic',
+  },
+  goalsSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: stensylColors.textWhite,
+    marginBottom: 16,
+    marginLeft: 16,
   },
 }); 
