@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { LineChart, ContributionGraph, PieChart } from "react-native-chart-kit";
 import { GoalProgress } from '@/components/GoalProgress';
 import { GoalSettingModal } from '@/components/GoalSetting';
-import { StensylScore } from '@/components/StensylScore';
+import { PerformanceIndex } from '@/components/PerformanceIndex';
 
 // Local type definition for Posts, matching the data structure
 interface Post {
@@ -266,10 +266,10 @@ export default function ProfileScreen() {
             <StatBox label="Avg. Session" value={`${formatTotalTime(averageSessionSeconds)}`} />
           </View>
 
-          {/* Stensyl Score Section */}
+          {/* Performance Index Section */}
           <View style={styles.goalsSection}>
-            <Text style={styles.sectionTitle}>Your Stensyl Score</Text>
-            <StensylScore showLeaderboard={true} />
+            <Text style={styles.sectionTitle}>Your Performance Index</Text>
+            <PerformanceIndex posts={posts} showLeaderboard={true} />
           </View>
 
           {/* Goals Section */}
