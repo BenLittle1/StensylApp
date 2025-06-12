@@ -26,6 +26,8 @@ interface ProgressData {
 
 interface GoalProgressProps {
   onSetGoalPress?: () => void;
+  onEditGoal?: (goal: Goal) => void;
+  onDeleteGoal?: (goalId: string) => void;
   compact?: boolean;
 }
 
@@ -94,7 +96,9 @@ const GoalCard: React.FC<{
   goal: Goal;
   progress: ProgressData;
   compact?: boolean;
-}> = ({ goal, progress, compact = false }) => {
+  onEdit?: (goal: Goal) => void;
+  onDelete?: (goalId: string) => void;
+}> = ({ goal, progress, compact = false, onEdit, onDelete }) => {
   const goalConfig = {
     daily_minutes: {
       title: 'Daily Time Goal',
@@ -173,12 +177,34 @@ const GoalCard: React.FC<{
           <MaterialIcons name={config.icon} size={24} color={progressColor} />
           <Text style={styles.goalTitle}>{config.title}</Text>
         </View>
-        {isCompleted && (
-          <View style={styles.completedBadge}>
-            <MaterialIcons name="check-circle" size={16} color="#10B981" />
-            <Text style={styles.completedText}>Complete!</Text>
-          </View>
-        )}
+        <View style={styles.goalActions}>
+          {isCompleted && (
+            <View style={styles.completedBadge}>
+              <MaterialIcons name="check-circle" size={16} color="#10B981" />
+              <Text style={styles.completedText}>Complete!</Text>
+            </View>
+          )}
+          {(onEdit || onDelete) && !compact && (
+            <View style={styles.goalActionButtons}>
+              {onEdit && (
+                <TouchableOpacity 
+                  style={styles.goalActionButton} 
+                  onPress={() => onEdit(goal)}
+                >
+                  <MaterialIcons name="edit" size={18} color={stensylColors.textMuted} />
+                </TouchableOpacity>
+              )}
+              {onDelete && (
+                <TouchableOpacity 
+                  style={styles.goalActionButton} 
+                  onPress={() => onDelete(goal.id)}
+                >
+                  <MaterialIcons name="delete" size={18} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
       </View>
 
       <View style={styles.goalContent}>
@@ -206,6 +232,8 @@ const GoalCard: React.FC<{
 
 export const GoalProgress: React.FC<GoalProgressProps> = ({ 
   onSetGoalPress, 
+  onEditGoal,
+  onDeleteGoal,
   compact = false 
 }) => {
   const { user } = useAuth();
@@ -299,6 +327,8 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
           goal={goal} 
           progress={goal.progress}
           compact={compact}
+          onEdit={onEditGoal}
+          onDelete={onDeleteGoal}
         />
       ))}
       
@@ -513,5 +543,19 @@ const styles = StyleSheet.create({
     color: stensylColors.primaryAccent,
     fontWeight: '600',
     fontSize: 14,
+  },
+  goalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  goalActionButtons: {
+    flexDirection: 'row',
+    marginLeft: 8,
+  },
+  goalActionButton: {
+    padding: 8,
+    marginLeft: 4,
+    borderRadius: 6,
+    backgroundColor: stensylColors.inputBackground,
   },
 }); 

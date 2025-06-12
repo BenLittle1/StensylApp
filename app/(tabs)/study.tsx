@@ -42,13 +42,14 @@ const formatPomodoroTime = (totalSeconds: number): string => {
   return `${mm}:${ss}`;
 };
 
-const POMODORO_BREAK_DURATION = 5 * 60;
+const DEFAULT_POMODORO_BREAK_DURATION = 5 * 60;
 const DEFAULT_POMODORO_STUDY_DURATION = 25 * 60;
 
 type TimerMode = 'Stopwatch' | 'Pomodoro';
 type PomodoroPhase = 'Study' | 'Break';
 
 const pomodoroDurationOptions = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
+const pomodoroBreakOptions = [5, 10, 15, 20, 25, 30];
 
 // Add quick start preset options
 const quickStartOptions = [
@@ -69,8 +70,10 @@ const StudyTrackerScreen = () => {
   const [timerMode, setTimerMode] = useState<TimerMode>('Stopwatch');
   const [pomodoroPhase, setPomodoroPhase] = useState<PomodoroPhase>('Study');
   const [customStudyDuration, setCustomStudyDuration] = useState(DEFAULT_POMODORO_STUDY_DURATION);
+  const [customBreakDuration, setCustomBreakDuration] = useState(DEFAULT_POMODORO_BREAK_DURATION);
   const [pomodoroSecondsLeft, setPomodoroSecondsLeft] = useState(customStudyDuration);
   const [isDurationPickerVisible, setIsDurationPickerVisible] = useState(false);
+  const [durationType, setDurationType] = useState<'study' | 'break'>('study');
 
   const [isEndSessionModalVisible, setIsEndSessionModalVisible] = useState(false);
   const [sessionName, setSessionName] = useState('');
@@ -85,8 +88,8 @@ const StudyTrackerScreen = () => {
   const resetPomodoro = useCallback((startPhase: PomodoroPhase = 'Study') => {
     setIsTimerActive(false);
     setPomodoroPhase(startPhase);
-    setPomodoroSecondsLeft(startPhase === 'Study' ? customStudyDuration : POMODORO_BREAK_DURATION);
-  }, [customStudyDuration]);
+    setPomodoroSecondsLeft(startPhase === 'Study' ? customStudyDuration : customBreakDuration);
+  }, [customStudyDuration, customBreakDuration]);
 
   useEffect(() => {
     if (isTimerActive) {
@@ -96,7 +99,7 @@ const StudyTrackerScreen = () => {
           setPomodoroSecondsLeft((prevSeconds) => {
             if (prevSeconds <= 1) {
               if (pomodoroPhase === 'Study') {
-                setPomodoroPhase('Break'); return POMODORO_BREAK_DURATION;
+                setPomodoroPhase('Break'); return customBreakDuration;
               } else {
                 setPomodoroPhase('Study'); return customStudyDuration;
               }
@@ -120,7 +123,7 @@ const StudyTrackerScreen = () => {
       if (pomodoroSecondsLeft === 0) {
         const nextPhase = pomodoroPhase === 'Study' ? 'Break' : 'Study';
         setPomodoroPhase(nextPhase);
-        setPomodoroSecondsLeft(nextPhase === 'Study' ? customStudyDuration : POMODORO_BREAK_DURATION);
+        setPomodoroSecondsLeft(nextPhase === 'Study' ? customStudyDuration : customBreakDuration);
       }
     }
   };
@@ -202,8 +205,15 @@ const StudyTrackerScreen = () => {
 
   const handleDurationSelect = (durationMinutes: number) => {
     const newDurationSeconds = durationMinutes * 60;
-    setCustomStudyDuration(newDurationSeconds);
-    if (pomodoroPhase === 'Study') setPomodoroSecondsLeft(newDurationSeconds);
+    
+    if (durationType === 'study') {
+      setCustomStudyDuration(newDurationSeconds);
+      if (pomodoroPhase === 'Study') setPomodoroSecondsLeft(newDurationSeconds);
+    } else {
+      setCustomBreakDuration(newDurationSeconds);
+      if (pomodoroPhase === 'Break') setPomodoroSecondsLeft(newDurationSeconds);
+    }
+    
     setIsTimerActive(false);
     setIsDurationPickerVisible(false);
   };
@@ -279,12 +289,33 @@ const StudyTrackerScreen = () => {
           </View>
 
           {timerMode === 'Pomodoro' && (
-            <TouchableOpacity onPress={() => setIsDurationPickerVisible(true)} style={styles.durationDisplayTouchable}>
-              <Text style={styles.durationDisplayText}>
-                {`${customStudyDuration / 60} min Study / ${POMODORO_BREAK_DURATION / 60} min Break`}
-              </Text>
-              <MaterialIcons name="edit" size={16} color={stensylColors.textMuted} style={{ marginLeft: 5 }} />
-            </TouchableOpacity>
+            <View style={styles.durationControlsContainer}>
+              <TouchableOpacity 
+                onPress={() => {
+                  setDurationType('study');
+                  setIsDurationPickerVisible(true);
+                }} 
+                style={styles.durationDisplayTouchable}
+              >
+                <Text style={styles.durationDisplayText}>
+                  {`${customStudyDuration / 60} min Study`}
+                </Text>
+                <MaterialIcons name="edit" size={16} color={stensylColors.textMuted} style={{ marginLeft: 5 }} />
+              </TouchableOpacity>
+              <Text style={styles.durationSeparator}>/</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setDurationType('break');
+                  setIsDurationPickerVisible(true);
+                }} 
+                style={styles.durationDisplayTouchable}
+              >
+                <Text style={styles.durationDisplayText}>
+                  {`${customBreakDuration / 60} min Break`}
+                </Text>
+                <MaterialIcons name="edit" size={16} color={stensylColors.textMuted} style={{ marginLeft: 5 }} />
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Quick Start Buttons */}
@@ -428,14 +459,16 @@ const StudyTrackerScreen = () => {
       >
         <TouchableOpacity style={styles.modalPickerOverlay} activeOpacity={1} onPressOut={() => setIsDurationPickerVisible(false)}>
           <View style={styles.durationPickerModalContent}>
-            <Text style={styles.modalTitle}>Select Study Duration</Text>
+            <Text style={styles.modalTitle}>
+              Select {durationType === 'study' ? 'Study' : 'Break'} Duration
+            </Text>
             <ModalScrollView>
-              {pomodoroDurationOptions.map((minutes) => (
+              {(durationType === 'study' ? pomodoroDurationOptions : pomodoroBreakOptions).map((minutes) => (
                 <TouchableOpacity
                   key={minutes}
                   style={[
                     styles.durationOptionButton,
-                    customStudyDuration === minutes * 60 && styles.durationOptionSelected,
+                    (durationType === 'study' ? customStudyDuration : customBreakDuration) === minutes * 60 && styles.durationOptionSelected,
                   ]}
                   onPress={() => handleDurationSelect(minutes)}
                 >
@@ -489,6 +522,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
+  durationControlsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   durationDisplayTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -496,12 +534,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: stensylColors.inputBackground,
     borderRadius: 8,
-    marginBottom: 20,
   },
   durationDisplayText: {
     color: stensylColors.textMuted,
     fontSize: 14,
     fontWeight: '500',
+  },
+  durationSeparator: {
+    color: stensylColors.textMuted,
+    fontSize: 14,
+    marginHorizontal: 8,
   },
 
   quickStartContainer: {

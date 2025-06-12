@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Share,
   Alert,
-  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Href, useRouter } from 'expo-router';
@@ -41,14 +40,6 @@ const PostItem: React.FC<PostItemProps> = ({
   const router = useRouter();
   const { user } = useAuth(); // Get current user
 
-  // Debug logging for delete button visibility
-  console.log('PostItem render:', { 
-    userExists: !!user, 
-    userId: user?.id, 
-    postUserId: userId, 
-    shouldShowDelete: user && user.id === userId 
-  });
-
   const handleCommentPress = () => {
     console.log(`Attempting to navigate to comments for post ID: ${id}.`);
     if (id) {
@@ -80,59 +71,27 @@ const PostItem: React.FC<PostItemProps> = ({
   };
 
   const handleDeletePress = async () => {
-    if (Platform.OS === 'web') {
-      // Bypass Alert on web
-      try {
-        console.log('Attempting to delete post (web):', id);
-        const { error } = await supabase
-          .from('posts')
-          .delete()
-          .eq('id', id);
-        if (error) {
-          console.error('Delete error:', error);
-          throw error;
-        }
-        console.log('Post deleted successfully');
-        if (onDelete) {
-          onDelete(id);
-        }
-      } catch (e: any) {
-        console.error('Delete failed:', e);
-        alert("Deletion Failed: " + e.message);
+    console.log('🔴 DELETE BUTTON PRESSED - Deleting post...');
+    try {
+      const { error, data } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user?.id); // Double-check user ownership
+        
+      if (error) {
+        console.error('🔴 Delete error:', error);
+        Alert.alert("Delete Error", error.message);
+        return;
       }
-    } else {
-      // Native: show confirmation
-      Alert.alert(
-        "Delete Post",
-        "Are you sure you want to permanently delete this study session?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: async () => {
-              try {
-                console.log('Attempting to delete post:', id);
-                const { error } = await supabase
-                  .from('posts')
-                  .delete()
-                  .eq('id', id);
-                if (error) {
-                  console.error('Delete error:', error);
-                  throw error;
-                }
-                console.log('Post deleted successfully');
-                if (onDelete) {
-                  onDelete(id);
-                }
-              } catch (e: any) {
-                console.error('Delete failed:', e);
-                Alert.alert("Deletion Failed", e.message);
-              }
-            }
-          }
-        ]
-      );
+      
+      console.log('🟢 Post deleted successfully');
+      if (onDelete) {
+        onDelete(id); // Trigger feed refresh
+      }
+    } catch (e: any) {
+      console.error('🔴 Delete failed:', e);
+      Alert.alert("Delete Failed", e.message || "Unable to delete post. Please try again.");
     }
   };
 

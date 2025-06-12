@@ -1,13 +1,10 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, Alert, ActivityIndicator, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { StyleSheet, Text, View, SafeAreaView, ActivityIndicator, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { stensylColors } from '@/constants/Colors';
 import { Stack, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { LineChart, ContributionGraph, PieChart } from "react-native-chart-kit";
-import { GoalProgress } from '@/components/GoalProgress';
-import { GoalSettingModal } from '@/components/GoalSetting';
-import { PerformanceIndex } from '@/components/PerformanceIndex';
+
 
 // Local type definition for Posts, matching the data structure
 interface Post {
@@ -49,119 +46,12 @@ const StatBox = ({ label, value }: { label: string; value: string | number }) =>
   </View>
 );
 
-// New data processing function for the line chart
-const processDataForWeeklyChart = (posts: Post[]) => {
-  const labels = [];
-  const data = [];
-  const today = new Date();
 
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    labels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
-    
-    const postsOnDay = posts.filter(post => {
-      const postDate = new Date(post.created_at);
-      return postDate.getFullYear() === d.getFullYear() &&
-             postDate.getMonth() === d.getMonth() &&
-             postDate.getDate() === d.getDate();
-    });
-
-    const totalMinutes = postsOnDay.reduce((acc, post) => acc + parseDuration(post.duration) / 60, 0);
-    data.push(Math.round(totalMinutes));
-  }
-  
-  return {
-    labels,
-    datasets: [{ data }]
-  };
-};
-
-// New data processing function for the heat map
-const processDataForHeatMap = (posts: Post[]) => {
-  const commitsData = [];
-  const today = new Date();
-
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-
-    const postsOnDay = posts.filter(post => {
-      const postDate = new Date(post.created_at);
-      return postDate.getFullYear() === d.getFullYear() &&
-             postDate.getMonth() === d.getMonth() &&
-             postDate.getDate() === d.getDate();
-    });
-
-    if (postsOnDay.length > 0) {
-      const totalMinutes = postsOnDay.reduce((acc, post) => acc + parseDuration(post.duration) / 60, 0);
-      commitsData.push({ date: d, count: Math.round(totalMinutes) });
-    }
-  }
-
-  return commitsData;
-};
-
-// New data processing function for the pie chart
-const processDataForPieChart = (posts: Post[]) => {
-  if (posts.length === 0) return [];
-  const subjectTimes: { [key: string]: number } = {};
-
-  posts.forEach(post => {
-    const subject = post.subject || 'Uncategorized';
-    const minutes = parseDuration(post.duration) / 60;
-    subjectTimes[subject] = (subjectTimes[subject] || 0) + minutes;
-  });
-
-  // Pre-defined colors for consistency
-  const pieColors = ["#E63946", "#F1FAEE", "#A8DADC", "#457B9D", "#1D3557", "#2a9d8f", "#e9c46a", "#f4a261", "#e76f51"];
-
-  return Object.keys(subjectTimes).map((subject, index) => ({
-    name: subject,
-    population: Math.round(subjectTimes[subject]),
-    color: pieColors[index % pieColors.length],
-    legendFontColor: stensylColors.textWhite,
-    legendFontSize: 14,
-  }));
-};
-
-// Chart visual configuration
-const chartConfig = {
-  backgroundColor: stensylColors.cardBackground,
-  backgroundGradientFrom: stensylColors.cardBackground,
-  backgroundGradientTo: stensylColors.cardBackground,
-  decimalPlaces: 0,
-  color: (opacity = 1) => `rgba(134, 65, 244, ${opacity})`, // Primary chart color
-  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-  style: {
-    borderRadius: 16,
-  },
-  propsForDots: {
-    r: "6",
-    strokeWidth: "2",
-    stroke: stensylColors.primaryAccent, // Dot color
-  },
-};
-
-// New chart config for the Heat Map
-const heatMapChartConfig = {
-  backgroundGradientFrom: stensylColors.cardBackground,
-  backgroundGradientTo: stensylColors.cardBackground,
-  color: (opacity = 1) => `rgba(134, 65, 244, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-};
-
-// New chart config for Pie Chart
-const pieChartConfig = {
-  color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-};
 
 export default function ProfileScreen() {
   const { signOut, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [goalModalVisible, setGoalModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -207,27 +97,7 @@ export default function ProfileScreen() {
   const totalSecondsStudied = posts.reduce((acc, post) => acc + parseDuration(post.duration), 0);
   const averageSessionSeconds = totalSessions > 0 ? totalSecondsStudied / totalSessions : 0;
 
-  // Memoize the chart data calculation
-  const weeklyChartData = useMemo(() => {
-    if (posts.length === 0) {
-      return {
-        labels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-        datasets: [{ data: [0, 0, 0, 0, 0, 0, 0] }]
-      };
-    }
-    return processDataForWeeklyChart(posts);
-  }, [posts]);
-  
-  // Memoize heat map data calculation
-  const heatMapData = useMemo(() => {
-    if (posts.length === 0) return [];
-    return processDataForHeatMap(posts);
-  }, [posts]);
 
-  // Memoize pie chart data calculation
-  const pieChartData = useMemo(() => {
-    return processDataForPieChart(posts);
-  }, [posts]);
 
   const handleSignOut = async () => {
     try {
@@ -236,6 +106,8 @@ export default function ProfileScreen() {
       Alert.alert('Sign Out Failed', error.message);
     }
   };
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -266,90 +138,30 @@ export default function ProfileScreen() {
             <StatBox label="Avg. Session" value={`${formatTotalTime(averageSessionSeconds)}`} />
           </View>
 
-          {/* Performance Index Section */}
+          {/* Study Summary */}
           <View style={styles.goalsSection}>
-            <Text style={styles.sectionTitle}>Your Performance Index</Text>
-            <PerformanceIndex posts={posts} showLeaderboard={true} />
+            <Text style={styles.sectionTitle}>Study Summary</Text>
+            <Text style={styles.summaryText}>
+              You've completed {totalSessions} study sessions with a total time of {formatTotalTime(totalSecondsStudied)}.
+              {totalSessions > 0 && ` Your average session is ${formatTotalTime(averageSessionSeconds)}.`}
+            </Text>
+            {totalSessions === 0 && (
+              <Text style={styles.summaryText}>
+                Start your first study session to see your progress here!
+              </Text>
+            )}
           </View>
-
-          {/* Goals Section */}
-          <View style={styles.goalsSection}>
-            <Text style={styles.sectionTitle}>Your Goals</Text>
-            <GoalProgress onSetGoalPress={() => setGoalModalVisible(true)} />
-          </View>
-
-          {/* Horizontal ScrollView for Charts */}
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            style={styles.chartsScrollView}
-          >
-            <View style={styles.chartContainer}>
-              <Text style={styles.chartTitle}>Weekly Progress (minutes)</Text>
-              <LineChart
-                data={weeklyChartData}
-                width={screenWidth - 32}
-                height={220}
-                yAxisSuffix="m"
-                chartConfig={chartConfig}
-                bezier
-                style={styles.chartStyle}
-              />
-            </View>
-
-            <View style={styles.chartContainer}>
-              <Text style={styles.chartTitle}>Yearly Study Activity</Text>
-              <ContributionGraph
-                values={heatMapData}
-                endDate={new Date()}
-                numDays={105}
-                width={screenWidth}
-                height={220}
-                chartConfig={heatMapChartConfig}
-                tooltipDataAttrs={() => ({})}
-              />
-            </View>
-
-            <View style={styles.chartContainer}>
-              <Text style={styles.chartTitle}>Subject Breakdown (minutes)</Text>
-              {pieChartData.length > 0 ? (
-                <PieChart
-                  data={pieChartData}
-                  width={screenWidth}
-                  height={220}
-                  chartConfig={pieChartConfig}
-                  accessor={"population"}
-                  backgroundColor={"transparent"}
-                  paddingLeft={"15"}
-                  center={[10, 0]}
-                  absolute
-                />
-              ) : (
-                <Text style={styles.noDataText}>No data for this chart yet.</Text>
-              )}
-            </View>
-          </ScrollView>
 
           <Text style={styles.userInfo}>
             Signed in as: {user?.email}
           </Text>
         </ScrollView>
       )}
-      
-      {/* Goal Setting Modal */}
-      <GoalSettingModal
-        visible={goalModalVisible}
-        onClose={() => setGoalModalVisible(false)}
-        onGoalSet={() => {
-          // Modal will close automatically after setting goal
-        }}
-      />
     </SafeAreaView>
   );
 }
 
-const screenWidth = Dimensions.get('window').width;
+
 
 const styles = StyleSheet.create({
   container: {
@@ -402,30 +214,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  chartsScrollView: {
-    marginTop: 20,
-    maxHeight: 300, // Or whatever height you prefer
-  },
-  chartContainer: {
-    width: screenWidth, // Each chart takes the full screen width
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: stensylColors.textWhite,
-    marginBottom: 10,
-  },
-  chartStyle: {
-    marginVertical: 8,
-    borderRadius: 16,
-  },
-  noDataText: {
-    color: stensylColors.textMuted,
-    marginTop: 20,
-    fontStyle: 'italic',
-  },
+
   goalsSection: {
     marginBottom: 24,
   },
@@ -435,5 +224,11 @@ const styles = StyleSheet.create({
     color: stensylColors.textWhite,
     marginBottom: 16,
     marginLeft: 16,
+  },
+  summaryText: {
+    fontSize: 16,
+    color: stensylColors.textMuted,
+    lineHeight: 24,
+    marginHorizontal: 16,
   },
 }); 
