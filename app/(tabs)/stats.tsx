@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { StyleSheet, SafeAreaView, ScrollView, Text, View, ActivityIndicator, TouchableOpacity, Dimensions, Alert } from 'react-native';
+import { StyleSheet, SafeAreaView, ScrollView, Text, View, ActivityIndicator, TouchableOpacity, Dimensions, Alert, Modal } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { stensylColors } from '@/constants/Colors';
 import { Stack, useFocusEffect } from 'expo-router';
 import { StudyReminders } from '@/components/StudyReminders';
@@ -7,6 +8,7 @@ import { Achievements } from '@/components/Achievements';
 import { GoalProgress } from '@/components/GoalProgress';
 import { GoalSettingModal } from '@/components/GoalSetting';
 import { PerformanceIndex } from '@/components/PerformanceIndex';
+import { StudyExport } from '@/components/StudyExport';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { LineChart, ContributionGraph, PieChart } from "react-native-chart-kit";
@@ -166,6 +168,9 @@ export default function StatsScreen() {
   const [goalModalVisible, setGoalModalVisible] = useState(false);
   const [editingGoal, setEditingGoal] = useState<any>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [goalToDelete, setGoalToDelete] = useState<string | null>(null);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -238,33 +243,36 @@ export default function StatsScreen() {
   };
 
   const handleDeleteGoal = async (goalId: string) => {
-    Alert.alert(
-      'Delete Goal',
-      'Are you sure you want to delete this goal?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase
-                .from('goals')
-                .update({ is_active: false })
-                .eq('id', goalId);
+    setGoalToDelete(goalId);
+    setDeleteConfirmVisible(true);
+  };
 
-              if (error) throw error;
+  const confirmDelete = async () => {
+    if (!goalToDelete) return;
+    
+    setDeleteConfirmVisible(false);
+    
+    try {
+      const { error } = await supabase
+        .from('goals')
+        .delete()
+        .eq('id', goalToDelete);
 
-              // Trigger refresh to update the goals display
-              setRefreshTrigger(prev => prev + 1);
-              Alert.alert('Success', 'Goal deleted successfully');
-            } catch (error: any) {
-              Alert.alert('Error', 'Failed to delete goal: ' + error.message);
-            }
-          },
-        },
-      ]
-    );
+      if (error) throw error;
+
+      // Trigger refresh to update the goals display
+      setRefreshTrigger(prev => prev + 1);
+      Alert.alert('Success', 'Goal deleted successfully');
+    } catch (error: any) {
+      Alert.alert('Error', 'Failed to delete goal: ' + error.message);
+    } finally {
+      setGoalToDelete(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirmVisible(false);
+    setGoalToDelete(null);
   };
 
   return (
@@ -272,7 +280,7 @@ export default function StatsScreen() {
       <Stack.Screen 
         options={{ 
           headerShown: false,
-          title: 'Analytics & Stats'
+          title: 'Stats'
         }} 
       />
       
@@ -283,7 +291,15 @@ export default function StatsScreen() {
         </View>
       ) : (
         <ScrollView style={styles.scrollView}>
-          <Text style={styles.title}>Your Analytics</Text>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>Your Analytics</Text>
+            <TouchableOpacity 
+              onPress={() => setExportModalVisible(true)}
+              style={styles.shareButton}
+            >
+              <MaterialIcons name="share" size={24} color={stensylColors.primaryAccent} />
+            </TouchableOpacity>
+          </View>
           
           {/* Overall Stats */}
           <View style={styles.statsContainer}>
@@ -308,6 +324,7 @@ export default function StatsScreen() {
               }}
               onEditGoal={handleEditGoal}
               onDeleteGoal={handleDeleteGoal}
+              refreshTrigger={refreshTrigger}
             />
           </View>
 
@@ -395,6 +412,44 @@ export default function StatsScreen() {
           setRefreshTrigger(prev => prev + 1);
         }}
       />
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={deleteConfirmVisible}
+        onRequestClose={cancelDelete}
+      >
+        <View style={styles.deleteModalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <Text style={styles.deleteModalTitle}>Delete Goal</Text>
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to permanently delete this goal? This action cannot be undone.
+            </Text>
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity 
+                style={[styles.deleteModalButton, styles.cancelButton]} 
+                onPress={cancelDelete}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.deleteModalButton, styles.confirmDeleteButton]} 
+                onPress={confirmDelete}
+              >
+                <Text style={styles.confirmDeleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Export/Share Modal */}
+      <StudyExport
+        posts={posts}
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -424,8 +479,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: stensylColors.textWhite,
-    marginBottom: 20,
-    marginTop: 16,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -480,5 +533,76 @@ const styles = StyleSheet.create({
     color: stensylColors.textMuted,
     marginTop: 20,
     fontStyle: 'italic',
+  },
+  
+  // Delete confirmation modal styles
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  deleteModalContent: {
+    backgroundColor: stensylColors.cardBackground,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  deleteModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: stensylColors.textWhite,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    color: stensylColors.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  deleteModalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: stensylColors.inputBackground,
+  },
+  cancelButtonText: {
+    color: stensylColors.textWhite,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmDeleteButton: {
+    backgroundColor: '#EF4444',
+  },
+  confirmDeleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  titleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 16,
+  },
+  shareButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: `${stensylColors.primaryAccent}15`,
   },
 }); 

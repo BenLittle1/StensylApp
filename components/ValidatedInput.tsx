@@ -5,7 +5,9 @@ import {
   View, 
   TextInput, 
   TextInputProps,
-  TouchableOpacity 
+  TouchableOpacity,
+  StyleProp,
+  ViewStyle
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { stensylColors } from '@/constants/Colors';
@@ -15,7 +17,7 @@ interface ValidationRule {
   message: string;
 }
 
-interface ValidatedInputProps extends TextInputProps {
+interface ValidatedInputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
   error?: string;
   success?: boolean;
@@ -23,6 +25,7 @@ interface ValidatedInputProps extends TextInputProps {
   onValidationChange?: (isValid: boolean, errors: string[]) => void;
   showValidationIcon?: boolean;
   required?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
 export const ValidatedInput: React.FC<ValidatedInputProps> = ({

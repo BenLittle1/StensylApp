@@ -69,7 +69,7 @@ const ScoreBreakdown: React.FC<{
       name: 'Consistency',
       points: data.consistency_points,
       maxPoints: 40,
-      icon: 'streak' as const,
+      icon: 'local-fire-department' as const,
       description: 'Study days and streaks',
       color: '#8B5CF6',
     },

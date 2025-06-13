@@ -4,6 +4,8 @@ import { useAuth } from '@/context/AuthContext';
 import { stensylColors } from '@/constants/Colors';
 import { Stack, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { StudyExport } from '@/components/StudyExport';
+import { MaterialIcons } from '@expo/vector-icons';
 
 
 // Local type definition for Posts, matching the data structure
@@ -52,6 +54,7 @@ export default function ProfileScreen() {
   const { signOut, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -117,9 +120,17 @@ export default function ProfileScreen() {
           headerTransparent: true,
           headerTitle: '',
           headerRight: () => (
-            <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
-              <Text style={styles.signOutButtonText}>Sign Out</Text>
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity 
+                onPress={() => setExportModalVisible(true)} 
+                style={styles.shareButton}
+              >
+                <MaterialIcons name="share" size={20} color={stensylColors.primaryAccent} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
+                <Text style={styles.signOutButtonText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
@@ -157,6 +168,13 @@ export default function ProfileScreen() {
           </Text>
         </ScrollView>
       )}
+
+      {/* Export/Share Modal */}
+      <StudyExport
+        posts={posts}
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -230,5 +248,15 @@ const styles = StyleSheet.create({
     color: stensylColors.textMuted,
     lineHeight: 24,
     marginHorizontal: 16,
+  },
+  
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  shareButton: {
+    padding: 8,
+    marginRight: 8,
   },
 }); 

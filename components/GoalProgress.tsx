@@ -29,6 +29,7 @@ interface GoalProgressProps {
   onEditGoal?: (goal: Goal) => void;
   onDeleteGoal?: (goalId: string) => void;
   compact?: boolean;
+  refreshTrigger?: number;
 }
 
 const formatTime = (minutes: number): string => {
@@ -234,7 +235,8 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
   onSetGoalPress, 
   onEditGoal,
   onDeleteGoal,
-  compact = false 
+  compact = false,
+  refreshTrigger
 }) => {
   const { user } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -279,7 +281,7 @@ export const GoalProgress: React.FC<GoalProgressProps> = ({
     };
 
     fetchGoalsAndProgress();
-  }, [user]);
+  }, [user, refreshTrigger]);
 
   const displayGoals = useMemo(() => {
     return goals.map(goal => ({

@@ -23,6 +23,7 @@ import { GoalSettingModal } from '@/components/GoalSetting';
 import { RecentSessions } from '@/components/RecentSessions';
 import { StudyStatusBadge } from '@/components/StudyStatusBadge';
 import { StudyTemplates } from '@/components/StudyTemplates';
+import { StudyExport } from '@/components/StudyExport';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define the structure of posts coming directly from Supabase DB
@@ -142,6 +143,7 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [goalModalVisible, setGoalModalVisible] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -344,6 +346,13 @@ export default function FeedScreen() {
           // Refresh goals when a new one is set
           setRefreshing(true);
         }}
+      />
+
+      {/* Export/Share Modal */}
+      <StudyExport
+        posts={posts}
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
       />
       
       {/* Welcome Modal */}
