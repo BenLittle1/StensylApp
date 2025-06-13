@@ -24,6 +24,7 @@ import { RecentSessions } from '@/components/RecentSessions';
 import { StudyStatusBadge } from '@/components/StudyStatusBadge';
 import { StudyTemplates } from '@/components/StudyTemplates';
 import { StudyExport } from '@/components/StudyExport';
+import { SocialFeed } from '@/components/SocialFeed';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define the structure of posts coming directly from Supabase DB
@@ -331,6 +332,14 @@ export default function FeedScreen() {
               }}
             />
 
+            {/* Recent Activity Section */}
+            <View style={styles.socialSection}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <View style={styles.socialFeedContainer}>
+                <SocialFeed compact={true} maxItems={3} />
+              </View>
+            </View>
+
             {/* Recent Sessions Summary */}
             <RecentSessions posts={posts} compact={true} />
         </View>
@@ -528,5 +537,14 @@ const styles = StyleSheet.create({
     color: stensylColors.textWhite,
     fontSize: 16,
     fontWeight: '600',
+  },
+  
+  socialSection: {
+    marginBottom: 24,
+  },
+  socialFeedContainer: {
+    backgroundColor: stensylColors.cardBackground,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
 });

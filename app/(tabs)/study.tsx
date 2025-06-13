@@ -20,6 +20,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'; // Added 
 import { useAuth } from '@/context/AuthContext'; // Import useAuth
 import { supabase } from '@/lib/supabase'; // Import Supabase client
 import { GoalProgress } from '@/components/GoalProgress';
+import { PostEnhancement } from '@/components/PostEnhancement';
 
 // Helper function to format time (always HH:MM:SS if hours > 0 for stopwatch)
 const formatStopwatchTime = (totalSeconds: number): string => {
@@ -82,6 +83,8 @@ const StudyTrackerScreen = () => {
   const [sessionDescription, setSessionDescription] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [isPostEnhancementVisible, setIsPostEnhancementVisible] = useState(false);
+  const [pendingPostData, setPendingPostData] = useState<any>(null);
 
   const intervalRef = useRef<number | null>(null);
 
@@ -152,43 +155,30 @@ const StudyTrackerScreen = () => {
       return;
     }
 
-    setLoading(true); // Assuming you add a 'loading' state for the modal save button
-
+    // Prepare data for PostEnhancement modal
     const postData = {
-      user_id: user.id,
-      user_name: user.user_metadata?.full_name || user.email,
       topic: sessionName.trim(),
       subject: subjectStudied.trim(),
       duration: formatStopwatchTime(stopwatchSeconds),
       notes: sessionDescription.trim() || null,
-      mode: timerMode,
       efficiency: efficiencyScore.trim() ? score : null,
     };
 
-    try {
-      const { error } = await supabase.from('posts').insert(postData);
+    setPendingPostData(postData);
+    setIsEndSessionModalVisible(false);
+    setIsPostEnhancementVisible(true);
+  };
 
-      if (error) {
-        throw error;
-      }
-
-      Alert.alert("Session Saved!", `Your study session has been posted to the feed.`);
-
-      setStopwatchSeconds(0);
-      resetPomodoro('Study');
-      setSessionName('');
-      setSubjectStudied('');
-      setEfficiencyScore('');
-      setSessionDescription('');
-      setIsEndSessionModalVisible(false);
-      router.push('/(tabs)');
-
-    } catch (e: any) {
-      console.error("Failed to save session to Supabase", e);
-      Alert.alert("Save Error", e.message || "Could not save your study session. Please try again.");
-    } finally {
-      setLoading(false); // End loading
-    }
+  const handlePostEnhancementComplete = () => {
+    // Reset everything after successful post
+    setStopwatchSeconds(0);
+    resetPomodoro('Study');
+    setSessionName('');
+    setSubjectStudied('');
+    setEfficiencyScore('');
+    setSessionDescription('');
+    setPendingPostData(null);
+    router.push('/(tabs)');
   };
 
   const handleCancelSave = () => setIsEndSessionModalVisible(false);
@@ -485,6 +475,19 @@ const StudyTrackerScreen = () => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* PostEnhancement Modal */}
+      {pendingPostData && (
+        <PostEnhancement
+          visible={isPostEnhancementVisible}
+          onClose={() => {
+            setIsPostEnhancementVisible(false);
+            setPendingPostData(null);
+          }}
+          postData={pendingPostData}
+          onComplete={handlePostEnhancementComplete}
+        />
+      )}
     </View>
   );
 };

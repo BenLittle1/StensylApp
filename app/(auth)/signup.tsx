@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { stensylColors } from '@/constants/Colors';
+import { NotificationBanner } from '@/components/NotificationBanner';
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -21,14 +22,27 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'error' | 'success' | 'warning' | 'info';
+    visible: boolean;
+  }>({ message: '', type: 'error', visible: false });
 
   const handleSignUp = async () => {
+    // Clear any existing notifications
+    setNotification({ message: '', type: 'error', visible: false });
+    
     if (!email || !password || !fullName) {
-      Alert.alert('Missing Fields', 'Please fill in all fields.');
+      setNotification({
+        message: 'Please fill in all fields.',
+        type: 'error',
+        visible: true
+      });
       return;
     }
+    
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -39,10 +53,54 @@ export default function SignUpScreen() {
     });
 
     if (error) {
-      Alert.alert('Sign Up Failed', error.message);
+      // Log the full error for debugging
+      console.log('Signup error:', error);
+      
+      // Provide user-friendly error messages
+      let errorMessage = error.message;
+      
+      // Handle password errors first (most specific)
+      if (error.message.includes('Password should be at least') ||
+          error.message.includes('weak password') ||
+          error.message.includes('password') && error.message.includes('weak')) {
+        errorMessage = 'Password must be at least 6 characters long and contain a mix of letters and numbers.';
+      } 
+      // Then check for duplicate user errors (more specific patterns)
+      else if (error.message.includes('User already registered') ||
+               (error.message.includes('already registered') && !error.message.includes('password')) ||
+               error.message.includes('Email address already registered') ||
+               error.code === 'user_already_exists') {
+        errorMessage = 'There is already an account associated with this email address. Please try signing in instead.';
+      } 
+      // Other validation errors
+      else if (error.message.includes('Invalid email')) {
+        errorMessage = 'Please enter a valid email address.';
+      } else if (error.message.includes('signup is disabled')) {
+        errorMessage = 'Account creation is currently disabled. Please contact support.';
+      } else if (error.message.includes('rate limit')) {
+        errorMessage = 'Too many signup attempts. Please wait a moment before trying again.';
+      }
+      
+      setNotification({
+        message: errorMessage,
+        type: 'error',
+        visible: true
+      });
     } else {
-      Alert.alert('Success', 'Account created! Please check your email to verify and then sign in.');
-      router.replace('/(auth)/login');
+      // Log the full response for debugging
+      console.log('Signup success data:', data);
+      
+      // User creation was successful
+      setNotification({
+        message: 'Account created! Please check your email to verify and then sign in.',
+        type: 'success',
+        visible: true
+      });
+      
+      // Navigate after a brief delay to allow user to see the success message
+      setTimeout(() => {
+        router.replace('/(auth)/login');
+      }, 2000);
     }
     setLoading(false);
   };
@@ -60,6 +118,14 @@ export default function SignUpScreen() {
           </View>
 
           <View style={styles.formContainer}>
+            {/* Notification Banner */}
+            <NotificationBanner
+              message={notification.message}
+              type={notification.type}
+              visible={notification.visible}
+              onDismiss={() => setNotification({ ...notification, visible: false })}
+            />
+            
             <TextInput
               style={styles.input}
               placeholder="Full Name"

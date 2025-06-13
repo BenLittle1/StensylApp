@@ -13,22 +13,53 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase'; // Adjusted import path
 import { stensylColors } from '@/constants/Colors'; // Adjusted import path
+import { NotificationBanner } from '@/components/NotificationBanner';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'error' | 'success' | 'warning' | 'info';
+    visible: boolean;
+  }>({ message: '', type: 'error', visible: false });
 
   const handleLogin = async () => {
+    // Clear any existing notifications
+    setNotification({ message: '', type: 'error', visible: false });
+    
     if (!email || !password) {
-      Alert.alert('Missing Fields', 'Please enter both email and password.');
+      setNotification({
+        message: 'Please enter both email and password.',
+        type: 'error',
+        visible: true
+      });
       return;
     }
+    
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      Alert.alert('Login Failed', error.message);
+      // Provide user-friendly error messages
+      let errorMessage = error.message;
+      
+      if (error.message.includes('Invalid login credentials')) {
+        errorMessage = 'You may have entered the wrong email address or password or your account might be locked.';
+      } else if (error.message.includes('Email not confirmed')) {
+        errorMessage = 'Please check your email and click the confirmation link before signing in.';
+      } else if (error.message.includes('Too many requests')) {
+        errorMessage = 'Too many login attempts. Please wait a moment before trying again.';
+      } else if (error.message.includes('Invalid email')) {
+        errorMessage = 'Please enter a valid email address.';
+      }
+      
+      setNotification({
+        message: errorMessage,
+        type: 'error',
+        visible: true
+      });
     } else {
       // The auth listener in AuthContext will handle the redirect,
       // but we could also explicitly navigate if needed.
@@ -49,6 +80,14 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.formContainer}>
+          {/* Notification Banner */}
+          <NotificationBanner
+            message={notification.message}
+            type={notification.type}
+            visible={notification.visible}
+            onDismiss={() => setNotification({ ...notification, visible: false })}
+          />
+          
           <TextInput
             style={styles.input}
             placeholder="Email"
