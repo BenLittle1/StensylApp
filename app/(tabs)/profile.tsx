@@ -1,12 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, ActivityIndicator, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { useAuth } from '@/context/AuthContext';
-import { stensylColors } from '@/constants/Colors';
-import { Stack, useFocusEffect } from 'expo-router';
-import { supabase } from '@/lib/supabase';
+import PostItem, { PostItemProps } from '@/components/PostItem';
 import { StudyExport } from '@/components/StudyExport';
-import { MaterialIcons } from '@expo/vector-icons';
-
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import { stensylColors } from '@/constants/Colors';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { Stack, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // Local type definition for Posts, matching the data structure
 interface Post {
@@ -48,11 +48,30 @@ const StatBox = ({ label, value }: { label: string; value: string | number }) =>
   </View>
 );
 
+interface Profile {
+  full_name?: string;
+  avatar_url?: string;
+  location?: string;
+  bio?: string;
+}
 
+// New transform function for profile posts
+const transformSupabasePost = (post: Post): Omit<PostItemProps, 'onDelete'> => {
+  return {
+    id: post.id,
+    userName: post.user_name || 'Anonymous',
+    timestamp: new Date(post.created_at).toLocaleString(),
+    location: "Online", // Assuming location isn't in post data
+    timeStudied: post.duration,
+    description: `${post.topic}\nSubject: ${post.subject}${post.notes ? `\nNotes: ${post.notes}` : ''}`,
+    userId: post.user_id,
+  };
+};
 
 export default function ProfileScreen() {
   const { signOut, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [exportModalVisible, setExportModalVisible] = useState(false);
 
@@ -60,47 +79,51 @@ export default function ProfileScreen() {
     useCallback(() => {
       let isActive = true;
 
-      const fetchUserPosts = async () => {
+      const fetchData = async () => {
         if (!user) {
           if (isActive) setLoading(false);
           return;
         }
-        // Only set loading true on the initial fetch for a smoother UX on re-focus
-        if (posts.length === 0) {
-            setLoading(true);
-        }
+
+        setLoading(true);
 
         try {
-          const { data, error } = await supabase
+          // Fetch profile information
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url, location, bio')
+            .eq('id', user.id)
+            .single();
+
+          if (profileError) throw profileError;
+          if (isActive) setProfile(profileData);
+
+          // Fetch posts for stats
+          const { data: postsData, error: postsError } = await supabase
             .from('posts')
             .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false });
+            .eq('user_id', user.id);
 
-          if (isActive) {
-            if (error) throw error;
-            setPosts(data || []);
-          }
+          if (postsError) throw postsError;
+          if (isActive) setPosts(postsData || []);
         } catch (error: any) {
-          if (isActive) Alert.alert('Error fetching stats', error.message);
+          if (isActive) Alert.alert('Error', error.message);
         } finally {
           if (isActive) setLoading(false);
         }
       };
 
-      fetchUserPosts();
+      fetchData();
 
       return () => {
         isActive = false;
       };
-    }, [user, posts.length])
+    }, [user])
   );
 
   const totalSessions = posts.length;
   const totalSecondsStudied = posts.reduce((acc, post) => acc + parseDuration(post.duration), 0);
   const averageSessionSeconds = totalSessions > 0 ? totalSecondsStudied / totalSessions : 0;
-
-
 
   const handleSignOut = async () => {
     try {
@@ -110,64 +133,69 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleDeletePost = (deletedPostId: string) => {
+    setPosts(currentPosts => currentPosts.filter(post => post.id !== deletedPostId));
+  };
+  
+  const transformedPosts = posts.map(post => ({
+    ...transformSupabasePost(post),
+    onDelete: handleDeletePost,
+  }));
 
+  const renderProfileHeader = () => (
+    <>
+      <View style={styles.header}>
+        {profile?.avatar_url ? (
+          <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <IconSymbol name="person.fill" size={40} color={stensylColors.background} />
+          </View>
+        )}
+        <View>
+          <Text style={styles.name}>{profile?.full_name || 'Anonymous User'}</Text>
+          <Text style={styles.location}>{profile?.location || 'No location provided'}</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.description}>{profile?.bio || 'No description available.'}</Text>
+      </View>
+
+      <View style={styles.statsContainer}>
+        <StatBox label="Total Time" value={formatTotalTime(totalSecondsStudied)} />
+        <StatBox label="Sessions" value={totalSessions} />
+        <StatBox label="Avg. Session" value={`${formatTotalTime(averageSessionSeconds)}`} />
+      </View>
+      
+      <Text style={[styles.sectionTitle, { marginTop: 16 }]}>My Posts</Text>
+    </>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={stensylColors.primaryAccent} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTransparent: true,
-          headerTitle: '',
-          headerRight: () => (
-            <View style={styles.headerButtons}>
-              <TouchableOpacity 
-                onPress={() => setExportModalVisible(true)} 
-                style={styles.shareButton}
-              >
-                <MaterialIcons name="share" size={20} color={stensylColors.primaryAccent} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
-                <Text style={styles.signOutButtonText}>Sign Out</Text>
-              </TouchableOpacity>
-            </View>
-          ),
-        }}
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <FlatList
+        data={transformedPosts}
+        renderItem={({ item }) => <PostItem {...item} />}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderProfileHeader}
+        ListFooterComponent={
+          <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
+            <Text style={styles.signOutButtonText}>Sign Out</Text>
+          </TouchableOpacity>
+        }
+        showsVerticalScrollIndicator={false}
       />
-      
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={stensylColors.primaryAccent} />
-        </View>
-      ) : (
-        <ScrollView style={styles.contentScrollView}>
-          <Text style={styles.title}>{user?.user_metadata?.full_name || 'Your Profile'}</Text>
-          
-          <View style={styles.statsContainer}>
-            <StatBox label="Total Time" value={formatTotalTime(totalSecondsStudied)} />
-            <StatBox label="Sessions" value={totalSessions} />
-            <StatBox label="Avg. Session" value={`${formatTotalTime(averageSessionSeconds)}`} />
-          </View>
-
-          {/* Study Summary */}
-          <View style={styles.goalsSection}>
-            <Text style={styles.sectionTitle}>Study Summary</Text>
-            <Text style={styles.summaryText}>
-              You've completed {totalSessions} study sessions with a total time of {formatTotalTime(totalSecondsStudied)}.
-              {totalSessions > 0 && ` Your average session is ${formatTotalTime(averageSessionSeconds)}.`}
-            </Text>
-            {totalSessions === 0 && (
-              <Text style={styles.summaryText}>
-                Start your first study session to see your progress here!
-              </Text>
-            )}
-          </View>
-
-          <Text style={styles.userInfo}>
-            Signed in as: {user?.email}
-          </Text>
-        </ScrollView>
-      )}
 
       {/* Export/Share Modal */}
       <StudyExport
@@ -179,33 +207,58 @@ export default function ProfileScreen() {
   );
 }
 
-
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: stensylColors.background,
+    paddingHorizontal: 20,
   },
-  contentScrollView: {
+  centered: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: stensylColors.background,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingTop: 10,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 16,
+    backgroundColor: stensylColors.inputBackground,
+  },
+  avatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: stensylColors.textMuted,
+  },
+  name: {
     color: stensylColors.textWhite,
-    marginBottom: 30, // Increased margin
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  location: {
+    color: stensylColors.textMuted,
+    fontSize: 16,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    width: '100%',
-    marginBottom: 40,
+    paddingVertical: 16,
+    backgroundColor: stensylColors.cardBackground,
+    borderRadius: 10,
+    marginBottom: 24,
   },
   statBox: {
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: stensylColors.textWhite,
   },
@@ -214,49 +267,30 @@ const styles = StyleSheet.create({
     color: stensylColors.textMuted,
     marginTop: 4,
   },
-  userInfo: {
-    fontSize: 14,
+  section: {
+    marginBottom: 24,
+  },
+  description: {
     color: stensylColors.textMuted,
-    marginTop: 40, // Added margin to push it down
+    fontSize: 16,
   },
   signOutButton: {
-    marginRight: 16,
-    padding: 8,
+    marginVertical: 40, // Give it space from the list
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: stensylColors.cardBackground,
+    alignItems: 'center',
+    marginHorizontal: 20, // To match the container padding
   },
   signOutButtonText: {
     color: stensylColors.primaryAccent,
     fontSize: 16,
-  },
-  centered: { // New style for centering the loader
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  goalsSection: {
-    marginBottom: 24,
+    fontWeight: 'bold',
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: stensylColors.textWhite,
     marginBottom: 16,
-    marginLeft: 16,
-  },
-  summaryText: {
-    fontSize: 16,
-    color: stensylColors.textMuted,
-    lineHeight: 24,
-    marginHorizontal: 16,
-  },
-  
-  headerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  shareButton: {
-    padding: 8,
-    marginRight: 8,
   },
 }); 
